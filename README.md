@@ -1,7 +1,6 @@
 
 <div align="center">
-  <!-- Logo: Uses rcms-logo.png in the root for GitHub compatibility. -->
-  ![RCMS Logo](rcms-logo.png)
+![RCMS Logo](rcms-logo.png)
   <h1>Regulatory Compliance Monitoring System (RCMS)</h1>
   <p>
     <b>Empowering Institutions to Stay Compliant, Organized, and Efficient</b>
