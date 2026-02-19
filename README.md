@@ -1,6 +1,8 @@
 
 <div align="center">
-![RCMS Logo](rcms-logo.png)
+<p align="center">
+  <img src="rcms-logo.png" alt="RCMS Logo" width="300" />
+</p>
   <h1>Regulatory Compliance Monitoring System (RCMS)</h1>
   <p>
     <b>Empowering Institutions to Stay Compliant, Organized, and Efficient</b>
