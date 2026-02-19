@@ -1,23 +1,42 @@
-# Regulatory Compliance Monitoring System (RCMS)
 
-## Overview
-Regulatory Compliance Monitoring System (RCMS) is a robust platform designed for educational institutions to manage, track, and ensure compliance with regulatory requirements. It streamlines communication, document management, notifications, and reporting for admins, principals, HODs, and faculty.
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Smritiii29/regulatory-compliance-monitoring-system-/main/public/logo.png" alt="RCMS Logo" width="120" />
+  <h1>Regulatory Compliance Monitoring System (RCMS)</h1>
+  <p>
+    <b>Empowering Institutions to Stay Compliant, Organized, and Efficient</b>
+  </p>
+  <br/>
+  <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License" />
+  <img src="https://img.shields.io/badge/Frontend-React%20%7C%20TypeScript-blue" alt="Frontend" />
+  <img src="https://img.shields.io/badge/Backend-Flask%20%7C%20Python-yellow" alt="Backend" />
+</div>
 
-## Features
-- **Chat & Messaging:** Secure direct and group messaging with file attachments. Notifications for new messages and attachments.
-- **Circulars Management:** Upload, categorize, and track compliance circulars. Attach files and set deadlines.
-- **Notifications:** Real-time alerts for new messages, circulars, submissions, and compliance actions.
-- **Submissions:** Faculty can submit proofs for circulars. Admins and principals review and track submissions.
-- **Dashboard:** Visual stats for compliance, accreditation, activity, and reports.
-- **User Management:** Role-based access for admin, principal, HOD, and faculty. Secure authentication and authorization.
-- **Reports:** Generate and download compliance and accreditation reports.
+---
 
-## Tech Stack
+## 🚀 Overview
+RCMS is a robust platform for educational institutions to manage, track, and ensure compliance with regulatory requirements. It streamlines communication, document management, notifications, and reporting for admins, principals, HODs, and faculty.
+
+---
+
+## 🌟 Features
+- **💬 Chat & Messaging:** Secure direct and group messaging with file attachments. Real-time notifications for new messages and attachments.
+- **📄 Circulars Management:** Upload, categorize, and track compliance circulars. Attach files and set deadlines.
+- **🔔 Notifications:** Real-time alerts for new messages, circulars, submissions, and compliance actions.
+- **📑 Submissions:** Faculty can submit proofs for circulars. Admins and principals review and track submissions.
+- **📊 Dashboard:** Visual stats for compliance, accreditation, activity, and reports.
+- **👥 User Management:** Role-based access for admin, principal, HOD, and faculty. Secure authentication and authorization.
+- **📝 Reports:** Generate and download compliance and accreditation reports.
+
+---
+
+## 🛠️ Tech Stack
 - **Frontend:** React, TypeScript, Vite, TailwindCSS, shadcn/ui
 - **Backend:** Flask, SQLAlchemy, Flask-JWT-Extended, werkzeug, SQLite
 - **API:** RESTful endpoints for chat, notifications, circulars, submissions, and reports
 
-## Installation
+---
+
+## 📦 Installation
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/Smritiii29/regulatory-compliance-monitoring-system-
@@ -36,7 +55,9 @@ Regulatory Compliance Monitoring System (RCMS) is a robust platform designed for
    - Add your `.env` file for backend secrets (do not commit this file).
    - Set up database (SQLite by default).
 
-## Usage
+---
+
+## 🏃 Usage
 - **Frontend:**
   ```bash
   npm run dev
@@ -48,7 +69,9 @@ Regulatory Compliance Monitoring System (RCMS) is a robust platform designed for
   ```
 - Access the app at `http://localhost:3000` (frontend) and `http://localhost:5000` (backend).
 
-## Project Structure
+---
+
+## 🗂️ Project Structure
 ```
 regulatory-compliance-monitoring-system-
 ├── backend/
@@ -63,20 +86,32 @@ regulatory-compliance-monitoring-system-
 │   ├── components/
 │   └── hooks/
 ├── public/
+│   └── logo.png
 ├── README.md
 ├── package.json
 └── ...
 ```
 
-## Contribution
+---
+
+## 🤝 Contribution
 - Fork the repo and create a branch for your feature or bugfix.
 - Submit a pull request with a clear description.
 
-## License
+---
+
+## 📄 License
 This project is licensed under the MIT License.
 
-## Contact
+---
+
+## 📬 Contact
 For support or questions, contact the project maintainers or open an issue in the repository.
 
 ---
-**RCMS** empowers institutions to stay compliant, organized, and efficient. Enjoy seamless communication and document management for regulatory success!
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Smritiii29/regulatory-compliance-monitoring-system-/main/public/demo.gif" alt="RCMS Demo" width="600" />
+  <br/>
+  <b>RCMS empowers institutions to stay compliant, organized, and efficient.<br/>Enjoy seamless communication and document management for regulatory success!</b>
+</div>
