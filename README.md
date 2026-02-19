@@ -1,7 +1,7 @@
 
 <div align="center">
-  <!-- Logo: Uses public/preview.png as the main logo for GitHub and local preview. -->
-  <img src="/preview.png" alt="RCMS Logo" width="120" />
+  <!-- Logo: Uses ./preview.png as the main logo for GitHub and local preview. -->
+  <img src="./preview.png" alt="RCMS Logo" width="120" />
   <h1>Regulatory Compliance Monitoring System (RCMS)</h1>
   <p>
     <b>Empowering Institutions to Stay Compliant, Organized, and Efficient</b>
