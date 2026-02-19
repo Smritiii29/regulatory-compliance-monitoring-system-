@@ -1,6 +1,6 @@
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Smritiii29/regulatory-compliance-monitoring-system-/main/public/logo.png" alt="RCMS Logo" width="120" />
+  <img src="src/assets/rcms-logo.png" alt="RCMS Logo" width="120" />
   <h1>Regulatory Compliance Monitoring System (RCMS)</h1>
   <p>
     <b>Empowering Institutions to Stay Compliant, Organized, and Efficient</b>
@@ -111,7 +111,8 @@ For support or questions, contact the project maintainers or open an issue in th
 ---
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Smritiii29/regulatory-compliance-monitoring-system-/main/public/demo.gif" alt="RCMS Demo" width="600" />
+  <!-- If you have a demo GIF, place it in src/assets/demo.gif and update the path below -->
+  <img src="src/assets/demo.gif" alt="RCMS Demo" width="600" />
   <br/>
   <b>RCMS empowers institutions to stay compliant, organized, and efficient.<br/>Enjoy seamless communication and document management for regulatory success!</b>
 </div>
