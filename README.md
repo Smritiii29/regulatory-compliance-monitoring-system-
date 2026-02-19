@@ -1,6 +1,7 @@
 
 <div align="center">
-  <img src="./rcms-logo.png" alt="RCMS Logo" width="120" />
+  <!-- Logo: Uses public/preview.png as the main logo for GitHub and local preview. -->
+  <img src="/preview.png" alt="RCMS Logo" width="120" />
   <h1>Regulatory Compliance Monitoring System (RCMS)</h1>
   <p>
     <b>Empowering Institutions to Stay Compliant, Organized, and Efficient</b>
@@ -29,9 +30,11 @@ RCMS is a robust platform for educational institutions to manage, track, and ens
 
 ---
 
+
 ## 🛠️ Tech Stack
 - **Frontend:** React, TypeScript, Vite, TailwindCSS, shadcn/ui
-- **Backend:** Flask, SQLAlchemy, Flask-JWT-Extended, werkzeug, SQLite
+- **Backend:** Flask, SQLAlchemy, Flask-JWT-Extended, Werkzeug
+- **Database:** PostgreSQL (recommended for production), SQLite (for development/testing)
 - **API:** RESTful endpoints for chat, notifications, circulars, submissions, and reports
 
 ---
@@ -51,9 +54,13 @@ RCMS is a robust platform for educational institutions to manage, track, and ens
    cd backend
    pip install -r requirements.txt
    ```
+
 4. **Configure environment:**
-   - Add your `.env` file for backend secrets (do not commit this file).
-   - Set up database (SQLite by default).
+  - Add your `.env` file for backend secrets (do not commit this file).
+  - Set up your database:
+    - **Development:** SQLite is used by default (no extra setup needed).
+    - **Production:** Set the `DATABASE_URL` in your `.env` to your PostgreSQL connection string (e.g., `postgresql://username:password@localhost:5432/rcms_db`).
+  - Install and run PostgreSQL if using in production. Ensure `psycopg2-binary` is installed (already in requirements.txt).
 
 ---
 
