@@ -1,5 +1,7 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth, getRoleLabel } from '@/contexts/AuthContext';
+import { notificationsAPI } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -15,6 +17,24 @@ import { Bell, LogOut, User, ChevronDown, Building2 } from 'lucide-react';
 const Header = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const fetchCount = () => {
+      notificationsAPI.unreadCount()
+        .then((data: { count: number }) => setUnreadCount(data.count))
+        .catch(() => {});
+    };
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    // Listen for custom event to force refresh
+    const handler = () => fetchCount();
+    window.addEventListener('notifications-updated', handler);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('notifications-updated', handler);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -46,9 +66,11 @@ const Header = () => {
           onClick={() => navigate('/notifications')}
         >
           <Bell className="w-5 h-5" />
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
-            3
-          </span>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
         </Button>
 
         {/* User Menu */}

@@ -46,7 +46,7 @@ const Settings = () => {
       'Submit department data',
       'Download documents',
     ],
-    staff: [
+    faculty: [
       'View approved documents',
       'Download documents',
       'Submit assigned data forms',

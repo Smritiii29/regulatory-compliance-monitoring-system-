@@ -12,9 +12,10 @@ import {
   BookOpen,
   Settings,
   ClipboardCheck,
-  FolderArchive,
-  Info,
   History,
+  MessageSquare,
+  FolderOpen,
+  ShieldCheck,
 } from 'lucide-react';
 import rcmsLogo from '@/assets/rcms-logo.png';
 
@@ -23,28 +24,31 @@ interface NavItem {
   icon: React.ElementType;
   href: string;
   adminOnly?: boolean;
+  hideForRoles?: string[];
 }
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-  { label: 'Documents', icon: FileText, href: '/documents' },
-  { label: 'Upload Document', icon: Upload, href: '/upload', adminOnly: true },
-  { label: 'Regulatory Frameworks', icon: BookOpen, href: '/regulatory' },
-  { label: 'Compliance Status', icon: ClipboardCheck, href: '/compliance' },
-  { label: 'Data Collection', icon: Building2, href: '/data-collection' },
+  { label: 'Circulars', icon: FileText, href: '/circulars' },
+  { label: 'Submissions', icon: ClipboardCheck, href: '/submissions' },
+  { label: 'Categories', icon: FolderOpen, href: '/categories' },
+  { label: 'Accreditation', icon: ShieldCheck, href: '/accreditation' },
+  { label: 'Chat', icon: MessageSquare, href: '/chat' },
   { label: 'Activity Log', icon: History, href: '/activity-log' },
   { label: 'Notifications', icon: Bell, href: '/notifications' },
   { label: 'Reports', icon: BarChart3, href: '/reports' },
-  { label: 'Archive', icon: FolderArchive, href: '/archive', adminOnly: true },
-  { label: 'User Management', icon: Users, href: '/users', adminOnly: true },
-  { label: 'Information', icon: Info, href: '/information' },
+  { label: 'User Management', icon: Users, href: '/users', hideForRoles: ['faculty'] },
 ];
 
 const Sidebar = () => {
   const location = useLocation();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
 
-  const filteredItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+  const filteredItems = navItems.filter((item) => {
+    if (item.hideForRoles && user?.role && item.hideForRoles.includes(user.role)) return false;
+    if (item.adminOnly && !isAdmin) return false;
+    return true;
+  });
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar flex flex-col border-r border-sidebar-border z-50">
