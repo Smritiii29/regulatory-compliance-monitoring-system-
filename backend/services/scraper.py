@@ -1,11 +1,54 @@
 import requests
 from bs4 import BeautifulSoup
+from app import create_app, db
+from models import Circular
+from sqlalchemy import text
+import re
+from datetime import datetime
 
 # -----------------------------
 # STEP 1: SCRAPE AICTE WEBSITE
 # -----------------------------
 URL = "https://www.aicte-india.org/bulletins"
 
+def classify_circular(title):
+    title_lower = title.lower()
+
+    if "deadline" in title_lower or "last date" in title_lower:
+        return "high"
+    elif "guidelines" in title_lower:
+        return "medium"
+    elif "circular" in title_lower or "notification" in title_lower:
+        return "medium"
+    else:
+        return "low"
+
+
+def detect_type(title):
+    title_lower = title.lower()
+
+    if "guidelines" in title_lower:
+        return "Guidelines"
+    elif "approval" in title_lower:
+        return "Approval"
+    elif "notification" in title_lower:
+        return "Notification"
+    elif "circular" in title_lower:
+        return "Circular"
+    else:
+        return "General"
+
+
+def extract_deadline(title):
+    match = re.search(r'\b\d{1,2}\s\w+\s\d{4}\b', title)
+
+    if match:
+        try:
+            return datetime.strptime(match.group(), "%d %B %Y")
+        except:
+            return None
+
+    return None
 
 def fetch_page():
     response = requests.get(URL)
@@ -50,9 +93,9 @@ def scrape_aicte():
 # -----------------------------
 # STEP 2: SAVE TO DATABASE
 # -----------------------------
-from app import create_app, db
-from models import Circular
-from sqlalchemy import text
+# from app import create_app, db
+# from models import Circular
+# from sqlalchemy import text
 
 
 def save_to_db(notices):
@@ -68,17 +111,23 @@ def save_to_db(notices):
             for item in notices:
                 title = item["title"]
 
-                # check duplicate
                 exists = Circular.query.filter_by(title=title).first()
 
                 if not exists:
+
+                    priority = classify_circular(title)
+                    ctype = detect_type(title)
+                    deadline = extract_deadline(title)
+
                     new_circular = Circular(
-                    title=title,
-                    description=item["link"],   # temporarily store link
-                    category="Regulation",
-                    regulation_type="AICTE",
-                    uploaded_by=1
-                )
+                        title=title,
+                        description=item["link"],
+                        category=ctype,
+                        regulation_type="AICTE",
+                        priority=priority,
+                        deadline=deadline,
+                        uploaded_by=1
+                    )
 
                     db.session.add(new_circular)
                     count += 1
