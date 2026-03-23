@@ -6,15 +6,19 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import AppLayout from "./components/layout/AppLayout";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import Documents from "./pages/Documents";
-import Upload from "./pages/Upload";
-import Regulatory from "./pages/Regulatory";
-import ComplianceStatus from "./pages/ComplianceStatus";
-import Notifications from "./pages/Notifications";
-import Reports from "./pages/Reports";
+import Signup from "./pages/Signup";
+import Dashboard from "./pages/DashboardNew";
+import Circulars from "./pages/Circulars";
+import Submissions from "./pages/Submissions";
+import Chat from "./pages/Chat";
+import NotificationsPage from "./pages/NotificationsPage";
+import ReportsPage from "./pages/ReportsPage";
+import Categories from "./pages/Categories";
+import Accreditation from "./pages/Accreditation";
+import ActivityLogPage from "./pages/ActivityLogPage";
+import UserManagement from "./pages/UserManagementNew";
 import Settings from "./pages/Settings";
-import ActivityLog from "./pages/ActivityLog";
+import OAuthCallback from "./pages/OAuthCallback";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,20 +32,20 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/oauth-callback" element={<OAuthCallback />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/documents" element={<Documents />} />
-              <Route path="/upload" element={<Upload />} />
-              <Route path="/regulatory" element={<Regulatory />} />
-              <Route path="/compliance" element={<ComplianceStatus />} />
-              <Route path="/notifications" element={<Notifications />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/activity-log" element={<ActivityLog />} />
-              <Route path="/data-collection" element={<Dashboard />} />
-              <Route path="/archive" element={<Documents />} />
-              <Route path="/users" element={<Dashboard />} />
-              <Route path="/information" element={<Regulatory />} />
+              <Route path="/circulars" element={<Circulars />} />
+              <Route path="/submissions" element={<Submissions />} />
+              <Route path="/chat" element={<Chat />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/reports" element={<ReportsPage />} />
+              <Route path="/categories" element={<Categories />} />
+              <Route path="/accreditation" element={<Accreditation />} />
+              <Route path="/activity-log" element={<ActivityLogPage />} />
+              <Route path="/users" element={<UserManagement />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<NotFound />} />

@@ -1,86 +1,82 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { authAPI, setToken, clearToken, getToken } from '@/services/api';
 
-export type UserRole = 'admin' | 'principal' | 'hod' | 'staff';
+export type UserRole = 'admin' | 'principal' | 'hod' | 'faculty';
 
 export interface User {
-  id: string;
+  id: number;
   email: string;
   name: string;
   role: UserRole;
   department?: string;
+  is_active?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
+  signup: (data: { name: string; email: string; password: string; role: string; department: string }) => Promise<boolean>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
   isAdmin: boolean;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration
-const mockUsers: Record<string, { password: string; user: User }> = {
-  'admin@college.edu.in': {
-    password: 'admin123',
-    user: {
-      id: '1',
-      email: 'admin@college.edu.in',
-      name: 'Dr. Rajesh Kumar',
-      role: 'admin',
-      department: 'Administration',
-    },
-  },
-  'principal@college.edu.in': {
-    password: 'principal123',
-    user: {
-      id: '2',
-      email: 'principal@college.edu.in',
-      name: 'Dr. Sunita Sharma',
-      role: 'principal',
-      department: 'Principal Office',
-    },
-  },
-  'hod.cse@college.edu.in': {
-    password: 'hod123',
-    user: {
-      id: '3',
-      email: 'hod.cse@college.edu.in',
-      name: 'Dr. Amit Patel',
-      role: 'hod',
-      department: 'Computer Science & Engineering',
-    },
-  },
-  'staff@college.edu.in': {
-    password: 'staff123',
-    user: {
-      id: '4',
-      email: 'staff@college.edu.in',
-      name: 'Priya Nair',
-      role: 'staff',
-      department: 'Human Resources',
-    },
-  },
-};
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Restore session on mount
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      authAPI.me()
+        .then((u: User) => setUser(u))
+        .catch(() => { clearToken(); })
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
+  }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<boolean> => {
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 800));
-
-    const userRecord = mockUsers[email.toLowerCase()];
-    if (userRecord && userRecord.password === password) {
-      setUser(userRecord.user);
+    try {
+      const data = await authAPI.login(email, password);
+      setToken(data.token);
+      setUser(data.user);
       return true;
+    } catch {
+      return false;
     }
-    return false;
+  }, []);
+
+  const signup = useCallback(async (signupData: { name: string; email: string; password: string; role: string; department: string }): Promise<boolean> => {
+    try {
+      const data = await authAPI.signup(signupData);
+      setToken(data.token);
+      setUser(data.user);
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
   const logout = useCallback(() => {
+    clearToken();
     setUser(null);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const u = await authAPI.me();
+      setUser(u);
+    } catch {
+      clearToken();
+      setUser(null);
+    }
   }, []);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'principal';
@@ -91,8 +87,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         login,
+        signup,
         logout,
+        refreshUser,
         isAdmin,
+        loading,
       }}
     >
       {children}
@@ -113,7 +112,7 @@ export const getRoleLabel = (role: UserRole): string => {
     admin: 'System Administrator',
     principal: 'Principal / Compliance Officer',
     hod: 'Head of Department',
-    staff: 'Department Staff',
+    faculty: 'Faculty Member',
   };
-  return labels[role];
+  return labels[role] || role;
 };
