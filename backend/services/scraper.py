@@ -110,6 +110,8 @@ def save_to_db(notices):
             count = 0
             new_items = []   # 🔥 define OUTSIDE loop
 
+            
+
             for item in notices:
                 title = item["title"]
 
@@ -123,22 +125,22 @@ def save_to_db(notices):
 
                 if not exists:
                     new_circular = Circular(
-                    title=title,
-                    description=item["link"],
-                    category=ctype,
-                    regulation_type="AICTE",
-                    priority=priority,
-                    deadline=deadline,
-                    uploaded_by=1
-                )
+                        title=title,
+                        description=item["link"],
+                        category=ctype,
+                        regulation_type="AICTE",
+                        priority=priority,
+                        deadline=deadline,
+                        uploaded_by=1
+                    )
 
-                db.session.add(new_circular)
-                db.session.flush()  # 🔥 get ID before commit
+                    db.session.add(new_circular)
+                    db.session.flush()
 
-                count += 1
+                    count += 1
 
-        # 🔥 store actual DB object (important)
-                new_items.append(new_circular)
+        # ✅ append ONLY here
+                    new_items.append(new_circular)
 
             db.session.commit()
             print(f"{count} new circulars added")
@@ -153,10 +155,13 @@ def save_to_db(notices):
                     for user in users:
             # 🔔 create notification
                         notification = Notification(
-                        user_id=user.id,
-                        circular_id=circular.id,
-                        message=f"New circular: {circular.title}"
-                    )
+                            user_id=user.id,
+                            circular_id=circular.id,
+                            title=circular.title,   # 🔥 REQUIRED FIX
+                            message=f"New circular: {circular.title}",
+                            type="circular",       # optional but good practice
+                            is_read=False
+                        )
                         db.session.add(notification)
 
                 db.session.commit()
