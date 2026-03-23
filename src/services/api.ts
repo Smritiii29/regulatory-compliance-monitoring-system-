@@ -16,40 +16,63 @@ export function clearToken(): void {
 
 // ── Fetch wrapper ────────────────────────────────────────────────────
 
-async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {}),
+// async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
+//   const token = getToken();
+//   const headers: Record<string, string> = {
+//     ...(options.headers as Record<string, string> || {}),
+//   };
+//   if (token) {
+//     headers['Authorization'] = `Bearer ${token}`;
+//   }
+//   if (!(options.body instanceof FormData)) {
+//     headers['Content-Type'] = 'application/json';
+//   }
+
+//   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+//   if (res.status === 401) {
+//     clearToken();
+//     window.location.href = '/login';
+//     throw new Error('Unauthorized');
+//   }
+
+//   if (!res.ok) {
+//     const data = await res.json().catch(() => ({}));
+//     throw new Error(data.error || `Request failed (${res.status})`);
+//   }
+
+//   // Handle blob responses (PDF downloads)
+//   const contentType = res.headers.get('content-type');
+//   if (contentType && contentType.includes('application/pdf')) {
+//     return res.blob();
+//   }
+
+//   return res.json();
+// }
+const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem("rcms_token");
+
+  const headers: HeadersInit = {
+    ...(options.headers || {}),
   };
+
+  // 🔥 Attach JWT if exists
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
+
+  // Handle JSON automatically
   if (!(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
+    headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const response = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    headers,
+  });
 
-  if (res.status === 401) {
-    clearToken();
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
-  }
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Request failed (${res.status})`);
-  }
-
-  // Handle blob responses (PDF downloads)
-  const contentType = res.headers.get('content-type');
-  if (contentType && contentType.includes('application/pdf')) {
-    return res.blob();
-  }
-
-  return res.json();
-}
-
+  return response.json();
+};
 // ── Auth API ─────────────────────────────────────────────────────────
 
 export const authAPI = {

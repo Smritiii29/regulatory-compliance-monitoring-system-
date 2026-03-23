@@ -5,6 +5,7 @@ from models import Circular
 from sqlalchemy import text
 import re
 from datetime import datetime
+from utils.email_sender import send_circulars_email
 
 # -----------------------------
 # STEP 1: SCRAPE AICTE WEBSITE
@@ -107,33 +108,73 @@ def save_to_db(notices):
             db.session.execute(text("SELECT 1"))
 
             count = 0
+            new_items = []   # 🔥 define OUTSIDE loop
 
             for item in notices:
                 title = item["title"]
 
+                priority = classify_circular(title)
+                ctype = detect_type(title)
+                deadline = extract_deadline(title)
+
+                print(title, priority, ctype, deadline)
+
                 exists = Circular.query.filter_by(title=title).first()
 
                 if not exists:
-
-                    priority = classify_circular(title)
-                    ctype = detect_type(title)
-                    deadline = extract_deadline(title)
-
                     new_circular = Circular(
-                        title=title,
-                        description=item["link"],
-                        category=ctype,
-                        regulation_type="AICTE",
-                        priority=priority,
-                        deadline=deadline,
-                        uploaded_by=1
-                    )
+                    title=title,
+                    description=item["link"],
+                    category=ctype,
+                    regulation_type="AICTE",
+                    priority=priority,
+                    deadline=deadline,
+                    uploaded_by=1
+                )
 
-                    db.session.add(new_circular)
-                    count += 1
+                db.session.add(new_circular)
+                db.session.flush()  # 🔥 get ID before commit
+
+                count += 1
+
+        # 🔥 store actual DB object (important)
+                new_items.append(new_circular)
 
             db.session.commit()
             print(f"{count} new circulars added")
+
+# 🔔 NOTIFICATIONS + EMAIL
+            if new_items:
+                from models import User, Notification
+
+                users = User.query.filter_by(is_active=True).all()
+
+                for circular in new_items:
+                    for user in users:
+            # 🔔 create notification
+                        notification = Notification(
+                        user_id=user.id,
+                        circular_id=circular.id,
+                        message=f"New circular: {circular.title}"
+                    )
+                        db.session.add(notification)
+
+                db.session.commit()
+
+    # 📧 send email to all users
+                for user in users:
+                    send_circulars_email(
+                    to_email=user.email,
+                    name=user.name,
+                    circulars=[
+                        {
+                        "title": c.title,
+                        "link": c.description
+                    } for c in new_items
+                    ]
+            
+                )
+                
 
         except Exception as e:
             print("Error while saving to DB:", e)

@@ -55,7 +55,7 @@ def create_app():
     # Create tables and seed data
     with app.app_context():
         db.create_all()
-        seed_data()
+        # seed_data()
 
     return app
 
@@ -117,7 +117,7 @@ def seed_data():
     for u in users_data:
         user = User(
             name=u['name'], email=u['email'],
-            password_hash=generate_password_hash(u['password']),
+    
             role=u['role'], department=u['department'], is_active=True,
             is_verified=False,  # Seed/dummy users cannot login
         )
