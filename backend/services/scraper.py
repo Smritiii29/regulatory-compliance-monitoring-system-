@@ -17,19 +17,28 @@ def parse_notifications(html):
 
     results = []
 
+    keywords = ["circular", "notification", "guidelines", "approval", "extension"]
+
     for link in soup.find_all("a"):
-        title = link.text.strip()
+        title = link.text.strip().lower()
         href = link.get("href")
 
-        # Basic filtering (remove garbage)
-        if title and len(title) > 25:
-            if href:
-                results.append({
-                    "title": title,
-                    "link": href
-                })
+        if not title or not href:
+            continue
 
-    # 🔥 IMPORTANT: limit results to avoid DB overload
+        # 🔥 filter by keywords
+        if any(keyword in title for keyword in keywords):
+
+            if href.startswith("/"):
+                href = "https://www.aicte-india.org" + href
+
+            clean_title = " ".join(title.split())
+
+            results.append({
+                "title": clean_title.title(),
+                "link": href
+            })
+
     return results[:10]
 
 
@@ -64,11 +73,12 @@ def save_to_db(notices):
 
                 if not exists:
                     new_circular = Circular(
-                        title=title,
-                        category="Regulation",
-                        regulation_type="AICTE",
-                        uploaded_by=1
-                    )
+                    title=title,
+                    description=item["link"],   # temporarily store link
+                    category="Regulation",
+                    regulation_type="AICTE",
+                    uploaded_by=1
+                )
 
                     db.session.add(new_circular)
                     count += 1
