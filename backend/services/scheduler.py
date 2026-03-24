@@ -16,7 +16,7 @@ def start_scheduler(app):
     scheduler.add_job(
         func=job,
         trigger='interval',
-        minutes=1,  # keep 1 for testing
+        minutes=60,  # keep 1 for testing
         id='aicte_scraper_job',
         replace_existing=True
     )
