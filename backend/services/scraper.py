@@ -199,7 +199,7 @@
 #         save_to_db(data)
 import requests
 from bs4 import BeautifulSoup
-from app import create_app, db
+from models import db
 from models import Circular, User, Notification
 import re
 from datetime import datetime
@@ -208,7 +208,7 @@ from utils.email_sender import send_circulars_email
 # -----------------------------
 # INIT APP ONCE (IMPORTANT FIX)
 # -----------------------------
-app = create_app()
+from flask import current_app
 
 # -----------------------------
 # STEP 1: SCRAPE AICTE WEBSITE
@@ -298,13 +298,12 @@ def scrape_aicte():
 # STEP 2: SAVE TO DATABASE
 # -----------------------------
 def save_to_db(notices):
-    with app.app_context():
         try:
             count = 0
             new_items = []
 
             for item in notices:
-                title = item["title"] + "TEST"
+                title = item["title"] + "TEST1"
 
                 priority = classify_circular(title)
                 ctype = detect_type(title)

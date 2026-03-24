@@ -1,17 +1,26 @@
-import schedule
-import time
+from apscheduler.schedulers.background import BackgroundScheduler
 from services.scraper import run_scraper
 
-def job():
-    print("Running scheduled scraper...")
-    run_scraper()
+scheduler = BackgroundScheduler()
 
-# run every 10 minutes (for testing)
-schedule.every(10).minutes.do(job)
+def start_scheduler(app):
+    print("🚀 Scheduler starting...")
 
-def start_scheduler():
-    print("Scheduler started...")
+    def job():
+        print("Running scheduled scraper...")
 
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
+        # 🔥 give Flask context here
+        with app.app_context():
+            run_scraper()
+
+    scheduler.add_job(
+        func=job,
+        trigger='interval',
+        minutes=1,  # keep 1 for testing
+        id='aicte_scraper_job',
+        replace_existing=True
+    )
+
+    scheduler.start()
+
+    print("✅ Scheduler started successfully")
