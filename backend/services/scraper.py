@@ -303,7 +303,7 @@ def save_to_db(notices):
             new_items = []
 
             for item in notices:
-                title = item["title"] + "TEST1"
+                title = item["title"] #+ "TEST1"
 
                 priority = classify_circular(title)
                 ctype = detect_type(title)
