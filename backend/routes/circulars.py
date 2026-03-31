@@ -262,9 +262,10 @@ circulars_bp = Blueprint('circulars', __name__)
 
 # ── Upload circular (admin only) ─────────────────────────────────────
 
-@circulars_bp.route('', methods=['POST'])
+@circulars_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_circular():
+    print("🔥 REQUEST RECEIVED:", request.method)
     uid = int(get_jwt_identity())
     user = User.query.get_or_404(uid)
 
@@ -369,7 +370,7 @@ def create_circular():
         send_notification_email(
             to_email=t.email,
             name=t.name,
-            subject=f'New Circular: {title}',
+            title=f'New Circular: {title}',
             message=notif_msg
         )
 
@@ -386,3 +387,23 @@ def create_circular():
     db.session.commit()
 
     return jsonify(circular.to_dict()), 201
+@circulars_bp.route('/list', methods=['GET'])
+@jwt_required()
+def list_circulars():
+    uid = int(get_jwt_identity())
+    user = User.query.get_or_404(uid)
+
+    print("🔥 LIST CIRCULARS CALLED")
+
+    # Admin / principal → see all
+    if user.role in ('admin', 'principal'):
+        circulars = Circular.query.order_by(Circular.created_at.desc()).all()
+
+    else:
+        circulars = Circular.query.filter(
+            (Circular.target_departments == 'all') |
+            (Circular.target_departments.ilike(f"%{user.department}%"))
+        ).order_by(Circular.created_at.desc()).all()
+
+    return jsonify([c.to_dict() for c in circulars]), 200
+    print("🔥 LIST CIRCULARS CALLED")

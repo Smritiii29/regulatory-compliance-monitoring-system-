@@ -56,12 +56,12 @@ const apiFetch = async (url: string, options: RequestInit = {}) => {
     ...(options.headers || {}),
   };
 
-  // 🔥 Attach JWT if exists
+  // Attach JWT
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Handle JSON automatically
+  // Only set JSON header if NOT FormData
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
@@ -70,6 +70,27 @@ const apiFetch = async (url: string, options: RequestInit = {}) => {
     ...options,
     headers,
   });
+
+  // 🔥 HANDLE AUTH ERROR
+  if (response.status === 401) {
+    localStorage.removeItem("rcms_token");
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
+  }
+
+  // 🔥 HANDLE OTHER ERRORS
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error("API ERROR:", errorData);
+
+    throw new Error(errorData.error || `Request failed (${response.status})`);
+  }
+
+  // Handle PDF
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/pdf")) {
+    return response.blob();
+  }
 
   return response.json();
 };
@@ -116,13 +137,13 @@ export const authAPI = {
 export const circularsAPI = {
   list: (params?: Record<string, string>) => {
     const qs = new URLSearchParams(params).toString();
-    return apiFetch(`/circulars${qs ? '?' + qs : ''}`);
+    return apiFetch(`/circulars/list${qs ? '?' + qs : ''}`);
   },
 
   get: (id: number) => apiFetch(`/circulars/${id}`),
 
   create: (formData: FormData) =>
-    apiFetch('/circulars', { method: 'POST', body: formData }),
+    apiFetch('/circulars/create', { method: 'POST', body: formData }),
 
   update: (id: number, data: Record<string, any>) =>
     apiFetch(`/circulars/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
