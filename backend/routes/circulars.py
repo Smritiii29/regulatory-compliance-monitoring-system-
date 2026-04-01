@@ -406,4 +406,58 @@ def list_circulars():
         ).order_by(Circular.created_at.desc()).all()
 
     return jsonify([c.to_dict() for c in circulars]), 200
-    print("🔥 LIST CIRCULARS CALLED")
+
+# ── Summarize circular document ──────────────────────────────────────
+
+@circulars_bp.route('/<int:circular_id>/summarize', methods=['POST'])
+@jwt_required()
+def summarize_circular(circular_id):
+    """Generate AI summary of circular document."""
+    try:
+        # Get circular
+        circular = Circular.query.get_or_404(circular_id)
+
+        # Check if PDF/DOCX exists
+        if not circular.file_path or not circular.file_name:
+            return jsonify({'error': 'No document attached to this circular'}), 400
+
+        if not circular.file_name.lower().endswith(('.pdf', '.docx')):
+            return jsonify({'error': 'Only PDF and DOCX files can be summarized'}), 400
+
+        # Extract text
+        try:
+            from utils.pdf_extractor import extract_text
+            text = extract_text(circular.file_path)
+            if not text.strip():
+                return jsonify({'error': 'Could not extract text from document'}), 400
+        except Exception as e:
+            return jsonify({'error': f'Error extracting text: {str(e)}'}), 500
+
+        # Generate summary
+        try:
+            from utils.ai_summarizer import summarize_document
+            api_key = current_app.config.get('GEMINI_API_KEY')
+            if not api_key:
+                return jsonify({'error': 'AI service not configured'}), 500
+
+            summary = summarize_document(text, circular.title, api_key)
+
+        except Exception as e:
+            return jsonify({'error': f'Error generating summary: {str(e)}'}), 500
+
+        # Log the activity
+        uid = get_jwt_identity()
+        log = ActivityLog(
+            user_id=int(uid),
+            action='summarize_circular',
+            entity_type='circular',
+            entity_id=circular_id,
+            details=f'Generated AI summary for: {circular.title}'
+        )
+        db.session.add(log)
+        db.session.commit()
+
+        return jsonify({'summary': summary}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500

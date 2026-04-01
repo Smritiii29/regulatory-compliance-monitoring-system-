@@ -35,3 +35,9 @@ class Config:
     # Frontend URL (for OAuth redirect)
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8080')
 
+    # Gemini AI Configuration
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+    GEMINI_MODEL = 'gemini-1.5-flash'
+    GEMINI_MAX_TOKENS = 8192
+    GEMINI_TEMPERATURE = 0.1
+
