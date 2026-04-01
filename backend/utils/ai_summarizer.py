@@ -1,36 +1,49 @@
-```python
-from google import genai
-from typing import List
 import re
 import time
+from typing import List
+
+try:
+    from google import genai as modern_genai
+except ImportError:
+    modern_genai = None
+
+try:
+    import google.generativeai as legacy_genai
+except ImportError:
+    legacy_genai = None
 
 
 class ComplianceSummarizer:
     def __init__(self, api_key: str, model: str = 'gemini-2.5-flash'):
-        self.client = genai.Client(api_key=api_key)
         self.model = model
-
-        # Retry config
         self.max_retries = 3
-        self.retry_delay = 2  # seconds
+        self.retry_delay = 2
+        self.last_request_time = 0.0
+        self.min_interval = 60 / 5
 
-        # ✅ Rate limiting (5 requests per minute)
-        self.last_request_time = 0
-        self.min_interval = 60 / 5  # 12 seconds
+        if modern_genai is not None:
+            self.mode = 'modern'
+            self.client = modern_genai.Client(api_key=api_key)
+        elif legacy_genai is not None:
+            self.mode = 'legacy'
+            legacy_genai.configure(api_key=api_key)
+            self.client = legacy_genai.GenerativeModel(model)
+        else:
+            raise ImportError(
+                'No supported Gemini SDK installed. '
+                'Install google-generativeai or google-genai.'
+            )
 
-    # ------------------ RATE LIMITER ------------------ #
     def throttle(self):
-        """Ensure we do not exceed API rate limits."""
+        """Keep requests below the configured rate limit."""
         current_time = time.time()
         elapsed = current_time - self.last_request_time
 
         if elapsed < self.min_interval:
-            sleep_time = self.min_interval - elapsed
-            time.sleep(sleep_time)
+            time.sleep(self.min_interval - elapsed)
 
         self.last_request_time = time.time()
 
-    # ------------------ CHUNKING ------------------ #
     def chunk_text(self, text: str, max_chunk_size: int = 12000) -> List[str]:
         """Split text into logical chunks based on document structure."""
         chunks = []
@@ -63,10 +76,7 @@ class ComplianceSummarizer:
                     continue
 
                 if len(current_chunk) + len(para) + 2 < max_chunk_size:
-                    if current_chunk:
-                        current_chunk += "\n\n" + para
-                    else:
-                        current_chunk = para
+                    current_chunk = f"{current_chunk}\n\n{para}".strip() if current_chunk else para
                 else:
                     if current_chunk:
                         chunks.append(current_chunk)
@@ -77,7 +87,6 @@ class ComplianceSummarizer:
 
         return chunks if chunks else [text]
 
-    # ------------------ FORMAT CLEANUP ------------------ #
     def format_summary(self, text: str) -> str:
         headings_map = {
             r"\d+\.\s*\*\*EXECUTIVE SUMMARY\*\*": "## EXECUTIVE SUMMARY",
@@ -104,37 +113,57 @@ class ComplianceSummarizer:
             'KEY REQUIREMENTS',
             'DEADLINES',
             'RESPONSIBLE PARTIES',
-            'COMPLIANCE NOTES'
+            'COMPLIANCE NOTES',
         ]
 
         for section in sections:
             text = re.sub(
                 rf"## {re.escape(section)}\n(?:## {re.escape(section)}\n)+",
                 f"## {section}\n",
-                text
+                text,
             )
 
         return text.strip()
 
-    # ------------------ API CALL ------------------ #
+    def _extract_text(self, response) -> str:
+        text = getattr(response, 'text', None)
+        if text:
+            return text.strip()
+        raise ValueError('Empty response from Gemini model')
+
+    def _call_modern_sdk(self, prompt: str, max_tokens: int) -> str:
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=prompt,
+            config=modern_genai.types.GenerateContentConfig(
+                temperature=0.1,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        return self._extract_text(response)
+
+    def _call_legacy_sdk(self, prompt: str, max_tokens: int) -> str:
+        response = self.client.generate_content(
+            prompt,
+            generation_config=legacy_genai.types.GenerationConfig(
+                temperature=0.1,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        return self._extract_text(response)
+
     def call_model(self, prompt: str, max_tokens: int = 2000) -> str:
-        """Centralized API call with retry + throttling."""
+        """Centralized API call with retry and throttling."""
         for attempt in range(self.max_retries):
             try:
-                self.throttle()  # ✅ Prevent rate limit
+                self.throttle()
 
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=genai.types.GenerateContentConfig(
-                        temperature=0.1,
-                        max_output_tokens=max_tokens,
-                    )
-                )
-                return response.text.strip()
+                if self.mode == 'modern':
+                    return self._call_modern_sdk(prompt, max_tokens)
+                return self._call_legacy_sdk(prompt, max_tokens)
 
-            except Exception as e:
-                error_str = str(e)
+            except Exception as exc:
+                error_str = str(exc)
 
                 if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str:
                     if attempt < self.max_retries - 1:
@@ -146,7 +175,6 @@ class ComplianceSummarizer:
 
         return "Error: Max retries exceeded"
 
-    # ------------------ CHUNK SUMMARIZATION ------------------ #
     def summarize_chunk(self, text: str) -> str:
         prompt = f"""Extract compliance facts from this document section.
 
@@ -164,7 +192,6 @@ One line per fact."""
 
         return self.call_model(prompt, max_tokens=2000)
 
-    # ------------------ MAIN PIPELINE ------------------ #
     def summarize_long_document(self, text: str, title: str = "") -> str:
         chunks = self.chunk_text(text)
 
@@ -206,11 +233,9 @@ All key rules.
         return self.format_summary(final_summary)
 
 
-# ------------------ ENTRY FUNCTION ------------------ #
 def summarize_document(text: str, title: str = "", api_key: str = None) -> str:
     if not api_key:
         raise ValueError("Gemini API key required")
 
     summarizer = ComplianceSummarizer(api_key)
     return summarizer.summarize_long_document(text, title)
-```

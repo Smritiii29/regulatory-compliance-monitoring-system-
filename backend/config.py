@@ -40,4 +40,3 @@ class Config:
     GEMINI_MODEL = 'gemini-2.5-flash'  # Latest stable model with good free tier support
     GEMINI_MAX_TOKENS = 8192
     GEMINI_TEMPERATURE = 0.1
-

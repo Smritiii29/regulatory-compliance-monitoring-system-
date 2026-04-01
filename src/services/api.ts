@@ -151,6 +151,12 @@ export const circularsAPI = {
   delete: (id: number) =>
     apiFetch(`/circulars/${id}`, { method: 'DELETE' }),
 
+  download: (id: number) =>
+    apiFetch(`/circulars/${id}/download`),
+
+  summarize: (id: number) =>
+    apiFetch(`/circulars/${id}/summarize`, { method: 'POST' }),
+
   downloadUrl: (id: number) => `${API_BASE}/circulars/${id}/download`,
 
   categorySummary: () => apiFetch('/circulars/categories/summary'),
@@ -211,6 +217,9 @@ export const chatAPI = {
     formData.append('file', data.file);
     return apiFetch('/chat', { method: 'POST', body: formData });
   },
+
+  download: (messageId: number) =>
+    apiFetch(`/chat/download/${messageId}`),
 
   downloadUrl: (messageId: number) => `${API_BASE}/chat/download/${messageId}`,
 

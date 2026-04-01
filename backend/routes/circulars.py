@@ -265,7 +265,7 @@ circulars_bp = Blueprint('circulars', __name__)
 @circulars_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_circular():
-    print("🔥 REQUEST RECEIVED:", request.method)
+    print("REQUEST RECEIVED:", request.method)
     uid = int(get_jwt_identity())
     user = User.query.get_or_404(uid)
 
@@ -393,7 +393,7 @@ def list_circulars():
     uid = int(get_jwt_identity())
     user = User.query.get_or_404(uid)
 
-    print("🔥 LIST CIRCULARS CALLED")
+    print("LIST CIRCULARS CALLED")
 
     # Admin / principal → see all
     if user.role in ('admin', 'principal'):

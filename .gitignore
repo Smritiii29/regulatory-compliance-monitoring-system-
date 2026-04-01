@@ -1,3 +1,4 @@
+
 # Dependencies
 node_modules/
 __pycache__/
@@ -34,4 +35,3 @@ npm-debug.log*
 
 # Test artifacts
 backend/test_api.py
->>>>>>> b86e2623a848564069e6ebc0792e2fd726bc394d

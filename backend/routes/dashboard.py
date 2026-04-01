@@ -7,6 +7,30 @@ dashboard_bp = Blueprint('dashboard', __name__)
 
 DEPARTMENTS = ['CSE', 'IT', 'ECE', 'EEE', 'MECH', 'CIVIL', 'BIOMEDICAL', 'MTECH CSE']
 
+
+def visible_circulars_query(user):
+    query = Circular.query
+
+    if user.role in ('admin', 'principal'):
+        return query
+
+    if user.role in ('hod', 'faculty') and user.department:
+        return query.filter(
+            db.or_(
+                Circular.target_departments == 'all',
+                Circular.target_departments.ilike(f'%{user.department}%')
+            )
+        )
+
+    return query.filter(Circular.target_departments == 'all')
+
+
+def announcement_source(circular):
+    description = (circular.description or '').lower()
+    if description.startswith('imported automatically from aicte circulars.'):
+        return 'AICTE Tracker'
+    return 'Admin Upload'
+
 @dashboard_bp.route('/stats', methods=['GET'])
 @jwt_required()
 def stats():
@@ -44,6 +68,17 @@ def stats():
     # Compliance rate
     compliance_rate = round(approved_submissions / total_submissions * 100, 1) if total_submissions > 0 else 0
 
+    announcement_circulars = visible_circulars_query(user) \
+        .order_by(Circular.created_at.desc()).limit(8).all()
+
+    announcement_ids = [item.id for item in announcement_circulars]
+    unread_announcement_count = Notification.query.filter(
+        Notification.user_id == uid,
+        Notification.type == 'circular',
+        Notification.is_read.is_(False),
+        Notification.circular_id.in_(announcement_ids) if announcement_ids else False
+    ).count()
+
     result = {
         'total_circulars': total_circulars,
         'active_circulars': active_circulars,
@@ -57,6 +92,18 @@ def stats():
         'upcoming_deadlines': [c.to_dict() for c in upcoming],
         'overdue_circulars': [c.to_dict() for c in overdue],
         'recent_activity': [a.to_dict() for a in recent_activity],
+        'announcements': [
+            {
+                'id': c.id,
+                'title': c.title,
+                'source': announcement_source(c),
+                'created_at': c.created_at.isoformat() if c.created_at else None,
+                'priority': c.priority,
+                'regulation_type': c.regulation_type,
+            }
+            for c in announcement_circulars
+        ],
+        'unread_announcements': unread_announcement_count,
     }
 
     # ── Role-specific data ─────────────────────────────────────────
