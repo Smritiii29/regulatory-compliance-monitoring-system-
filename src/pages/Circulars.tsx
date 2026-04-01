@@ -63,6 +63,7 @@ const Circulars = () => {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [selectedCircular, setSelectedCircular] = useState<any>(null);
   const [summary, setSummary] = useState('');
+  const [summarySource, setSummarySource] = useState<'ai' | 'fallback' | 'cache' | ''>('');
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false);
 
@@ -226,12 +227,14 @@ const Circulars = () => {
 
   const handleSummarize = async (circularId: number) => {
     setSummary('');
+    setSummarySource('');
     setSummaryLoading(true);
     setSummaryDialogOpen(true);
 
     try {
       const data = await circularsAPI.summarize(circularId);
       setSummary(data.summary || '');
+      setSummarySource(data.source || '');
     } catch (err: any) {
       toast({
         title: 'Error',
@@ -464,16 +467,22 @@ const Circulars = () => {
 
       <Dialog
         open={summaryDialogOpen}
-        onOpenChange={(open) => {
+          onOpenChange={(open) => {
           setSummaryDialogOpen(open);
-          if (!open) setSummary('');
+          if (!open) {
+            setSummary('');
+            setSummarySource('');
+          }
         }}
       >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Document Summary</DialogTitle>
             <DialogDescription>
-              AI-generated compliance summary for the selected regulatory document
+              {summarySource === 'ai' && 'AI-generated compliance summary for the selected regulatory document'}
+              {summarySource === 'fallback' && 'Generated from extracted document text because AI summary quota is currently unavailable'}
+              {summarySource === 'cache' && 'Cached summary for the selected regulatory document'}
+              {!summarySource && 'Generating a compliance summary for the selected regulatory document'}
             </DialogDescription>
           </DialogHeader>
           {summaryLoading ? (

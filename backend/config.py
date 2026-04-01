@@ -6,6 +6,56 @@ load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env'))
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
+
+def parse_allowed_oauth_emails(raw_value: str) -> dict[str, dict[str, str | None]]:
+    mapping: dict[str, dict[str, str | None]] = {}
+
+    for item in raw_value.split(','):
+        item = item.strip()
+        if not item:
+            continue
+
+        parts = [part.strip() for part in item.split(':')]
+        if len(parts) < 2:
+            continue
+
+        email = parts[0].lower()
+        role = parts[1].lower()
+        department = parts[2] if len(parts) > 2 and parts[2] else None
+
+        mapping[email] = {
+            'role': role,
+            'department': department,
+        }
+
+    return mapping
+
+
+def parse_authorized_login_users(raw_value: str) -> dict[str, dict[str, str | None]]:
+    mapping: dict[str, dict[str, str | None]] = {}
+
+    for item in raw_value.split(','):
+        item = item.strip()
+        if not item:
+            continue
+
+        parts = [part.strip() for part in item.split(':')]
+        if len(parts) < 3:
+            continue
+
+        email = parts[0].lower()
+        role = parts[1].lower()
+        password = parts[2]
+        department = parts[3] if len(parts) > 3 and parts[3] else None
+
+        mapping[email] = {
+            'role': role,
+            'password': password,
+            'department': department,
+        }
+
+    return mapping
+
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'rcms-secret-key-change-in-production')
     SQLALCHEMY_DATABASE_URI = os.getenv(
@@ -34,6 +84,14 @@ class Config:
 
     # Frontend URL (for OAuth redirect)
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:8080')
+
+    # Allowed OAuth emails
+    ALLOWED_OAUTH_EMAILS = os.getenv('ALLOWED_OAUTH_EMAILS', '')
+    ALLOWED_OAUTH_EMAIL_MAP = parse_allowed_oauth_emails(ALLOWED_OAUTH_EMAILS)
+
+    # Password-authenticated accounts allowed to sign in
+    AUTHORIZED_LOGIN_USERS = os.getenv('AUTHORIZED_LOGIN_USERS', '')
+    AUTHORIZED_LOGIN_USER_MAP = parse_authorized_login_users(AUTHORIZED_LOGIN_USERS)
 
     # Gemini AI Configuration
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')

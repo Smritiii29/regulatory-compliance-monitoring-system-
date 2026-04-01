@@ -12,6 +12,17 @@ auth_bp = Blueprint('auth', __name__)
 VALID_ROLES = ['admin', 'principal', 'hod', 'faculty']
 DEPARTMENTS = ['CSE', 'IT', 'ECE', 'EEE', 'MECH', 'CIVIL', 'BIOMEDICAL', 'MTECH CSE']
 
+
+def get_authorized_login_entry(email: str) -> dict | None:
+    return current_app.config.get('AUTHORIZED_LOGIN_USER_MAP', {}).get((email or '').lower())
+
+
+def is_authorized_login_email(email: str) -> bool:
+    authorized_map = current_app.config.get('AUTHORIZED_LOGIN_USER_MAP', {})
+    if not authorized_map:
+        return True
+    return (email or '').lower() in authorized_map
+
 # ── Send OTP (before signup) ─────────────────────────────────────────
 
 @auth_bp.route('/send-otp', methods=['POST'])
@@ -23,6 +34,9 @@ def send_otp():
 
     if not email:
         return jsonify({'error': 'Email is required'}), 400
+
+    if not is_authorized_login_email(email):
+        return jsonify({'error': 'This email is not authorized to access the system'}), 403
 
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already registered'}), 409
@@ -79,6 +93,9 @@ def google_verify_token():
         if email_verified != 'true':
             return jsonify({'error': 'Google email is not verified'}), 400
 
+        if not is_authorized_login_email(email):
+            return jsonify({'error': 'This email is not authorized to access the system'}), 403
+
         # Ensure the token was issued for our own client ID
         aud = info.get('aud', '')
         expected_client_id = current_app.config.get('GOOGLE_CLIENT_ID', '')
@@ -98,6 +115,9 @@ def google_verify_token():
 
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
+    if current_app.config.get('AUTHORIZED_LOGIN_USER_MAP'):
+        return jsonify({'error': 'Self-service signup is disabled for this deployment'}), 403
+
     data = request.get_json()
     name = data.get('name', '').strip()
     email = data.get('email', '').strip().lower()
@@ -150,8 +170,11 @@ def login():
     email = data.get('email', '').strip().lower()
     password = data.get('password', '')
 
+    if not is_authorized_login_email(email):
+        return jsonify({'error': 'This email is not authorized to access the system'}), 403
+
     user = User.query.filter_by(email=email).first()
-    if not user or not check_password_hash(user.password_hash, password):
+    if not user or not user.password_hash or not check_password_hash(user.password_hash, password):
         return jsonify({'error': 'Invalid email or password'}), 401
     if not user.is_verified:
         return jsonify({'error': 'This is a demo account. Please sign up to access the system.'}), 403
@@ -290,6 +313,8 @@ def create_user():
 
     if not name or not email or not password:
         return jsonify({'error': 'Name, email and password are required'}), 400
+    if not is_authorized_login_email(email):
+        return jsonify({'error': 'This email is not authorized to access the system'}), 403
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already exists'}), 409
 

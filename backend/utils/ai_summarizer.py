@@ -1,91 +1,68 @@
 import re
 import time
-from typing import List
+from collections import OrderedDict
 
-try:
-    from google import genai as modern_genai
-except ImportError:
-    modern_genai = None
-
-try:
-    import google.generativeai as legacy_genai
-except ImportError:
-    legacy_genai = None
+import requests
 
 
 class ComplianceSummarizer:
     def __init__(self, api_key: str, model: str = 'gemini-2.5-flash'):
+        if not api_key:
+            raise ValueError('Gemini API key required')
+
+        self.api_key = api_key
         self.model = model
-        self.max_retries = 3
-        self.retry_delay = 2
-        self.last_request_time = 0.0
-        self.min_interval = 60 / 5
+        self.max_retries = 2
+        self.request_timeout = (10, 45)
+        self.max_input_chars = 18000
+        self.max_keyword_lines = 40
 
-        if modern_genai is not None:
-            self.mode = 'modern'
-            self.client = modern_genai.Client(api_key=api_key)
-        elif legacy_genai is not None:
-            self.mode = 'legacy'
-            legacy_genai.configure(api_key=api_key)
-            self.client = legacy_genai.GenerativeModel(model)
-        else:
-            raise ImportError(
-                'No supported Gemini SDK installed. '
-                'Install google-generativeai or google-genai.'
-            )
+        self.session = requests.Session()
+        self.session.trust_env = False
 
-    def throttle(self):
-        """Keep requests below the configured rate limit."""
-        current_time = time.time()
-        elapsed = current_time - self.last_request_time
+    def normalize_text(self, text: str) -> str:
+        text = (text or '').replace('\r\n', '\n').replace('\r', '\n').replace('\x00', ' ')
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
 
-        if elapsed < self.min_interval:
-            time.sleep(self.min_interval - elapsed)
+    def chunk_text(self, text: str) -> str:
+        normalized = self.normalize_text(text)
+        if len(normalized) <= self.max_input_chars:
+            return normalized
 
-        self.last_request_time = time.time()
+        keywords = (
+            'must', 'shall', 'required', 'deadline', 'last date', 'submit',
+            'compliance', 'eligibility', 'criteria', 'institute', 'program',
+            'approval', 'document', 'fee', 'percentage',
+        )
 
-    def chunk_text(self, text: str, max_chunk_size: int = 12000) -> List[str]:
-        """Split text into logical chunks based on document structure."""
-        chunks = []
-
-        section_patterns = [
-            r'\n(?:SECTION|CHAPTER|PART|ARTICLE)\s+[A-Z0-9]+',
-            r'\n(?:\d+\.)?\s+(?:[A-Z][A-Za-z]+){2,}[\s:]*\n',
-            r'\n(?:Subject|Reference|Eligibility|Requirements|Criteria|Program|Institute)',
-        ]
-
-        split_text = text
-        for pattern in section_patterns:
-            if re.search(pattern, split_text, re.IGNORECASE):
-                split_text = re.split(pattern, split_text, flags=re.IGNORECASE)
+        keyword_lines = []
+        seen = set()
+        for line in normalized.splitlines():
+            cleaned = line.strip()
+            if len(cleaned) < 20:
+                continue
+            lowered = cleaned.lower()
+            if any(keyword in lowered for keyword in keywords) and cleaned not in seen:
+                keyword_lines.append(cleaned)
+                seen.add(cleaned)
+            if len(keyword_lines) >= self.max_keyword_lines:
                 break
 
-        if isinstance(split_text, str):
-            split_text = [split_text]
+        opening = normalized[:8000]
+        important = '\n'.join(keyword_lines)[:7000]
+        closing = normalized[-3000:] if len(normalized) > 11000 else ''
 
-        for section in split_text:
-            if not section.strip():
-                continue
-
-            paragraphs = re.split(r'\n\s*\n+', section.strip())
-            current_chunk = ""
-
-            for para in paragraphs:
-                para = para.strip()
-                if not para:
-                    continue
-
-                if len(current_chunk) + len(para) + 2 < max_chunk_size:
-                    current_chunk = f"{current_chunk}\n\n{para}".strip() if current_chunk else para
-                else:
-                    if current_chunk:
-                        chunks.append(current_chunk)
-                    current_chunk = para
-
-            if current_chunk:
-                chunks.append(current_chunk)
-
-        return chunks if chunks else [text]
+        combined = '\n\n'.join(
+            part for part in (
+                opening,
+                f'IMPORTANT EXTRACTS\n{important}' if important else '',
+                f'ENDING EXTRACT\n{closing}' if closing else '',
+            )
+            if part
+        )
+        return combined[:self.max_input_chars]
 
     def format_summary(self, text: str) -> str:
         headings_map = {
@@ -93,6 +70,8 @@ class ComplianceSummarizer:
             r"\d+\.\s*EXECUTIVE SUMMARY": "## EXECUTIVE SUMMARY",
             r"\d+\.\s*\*\*KEY REQUIREMENTS\*\*": "## KEY REQUIREMENTS",
             r"\d+\.\s*KEY REQUIREMENTS": "## KEY REQUIREMENTS",
+            r"\d+\.\s*\*\*REQUIREMENTS\*\*": "## KEY REQUIREMENTS",
+            r"\d+\.\s*REQUIREMENTS": "## KEY REQUIREMENTS",
             r"\d+\.\s*\*\*DEADLINES\*\*": "## DEADLINES",
             r"\d+\.\s*DEADLINES": "## DEADLINES",
             r"\d+\.\s*\*\*RESPONSIBLE PARTIES\*\*": "## RESPONSIBLE PARTIES",
@@ -107,135 +86,168 @@ class ComplianceSummarizer:
         text = re.sub(r"^\s*\*\s+", "- ", text, flags=re.MULTILINE)
         text = re.sub(r"^\s*\d+\.\s+", "- ", text, flags=re.MULTILINE)
         text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
-
-        sections = [
-            'EXECUTIVE SUMMARY',
-            'KEY REQUIREMENTS',
-            'DEADLINES',
-            'RESPONSIBLE PARTIES',
-            'COMPLIANCE NOTES',
-        ]
-
-        for section in sections:
-            text = re.sub(
-                rf"## {re.escape(section)}\n(?:## {re.escape(section)}\n)+",
-                f"## {section}\n",
-                text,
-            )
-
         return text.strip()
 
-    def _extract_text(self, response) -> str:
-        text = getattr(response, 'text', None)
-        if text:
-            return text.strip()
-        raise ValueError('Empty response from Gemini model')
+    def extract_response_text(self, payload: dict) -> str:
+        candidates = payload.get('candidates') or []
+        for candidate in candidates:
+            content = candidate.get('content') or {}
+            for part in content.get('parts') or []:
+                text = part.get('text')
+                if text:
+                    return text.strip()
 
-    def _call_modern_sdk(self, prompt: str, max_tokens: int) -> str:
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=modern_genai.types.GenerateContentConfig(
-                temperature=0.1,
-                max_output_tokens=max_tokens,
-            ),
-        )
-        return self._extract_text(response)
+        prompt_feedback = payload.get('promptFeedback') or {}
+        block_reason = prompt_feedback.get('blockReason')
+        if block_reason:
+            raise RuntimeError(f'Gemini blocked the request: {block_reason}')
 
-    def _call_legacy_sdk(self, prompt: str, max_tokens: int) -> str:
-        response = self.client.generate_content(
-            prompt,
-            generation_config=legacy_genai.types.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=max_tokens,
-            ),
-        )
-        return self._extract_text(response)
+        raise RuntimeError('Empty response from Gemini model')
 
-    def call_model(self, prompt: str, max_tokens: int = 2000) -> str:
-        """Centralized API call with retry and throttling."""
+    def call_model(self, prompt: str, max_tokens: int = 1400) -> str:
+        url = f'https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent'
+        body = {
+            'contents': [{'parts': [{'text': prompt}]}],
+            'generationConfig': {
+                'temperature': 0.1,
+                'maxOutputTokens': max_tokens,
+            },
+        }
+
+        last_error = None
         for attempt in range(self.max_retries):
             try:
-                self.throttle()
+                response = self.session.post(
+                    url,
+                    params={'key': self.api_key},
+                    json=body,
+                    timeout=self.request_timeout,
+                )
 
-                if self.mode == 'modern':
-                    return self._call_modern_sdk(prompt, max_tokens)
-                return self._call_legacy_sdk(prompt, max_tokens)
+                if response.status_code in (429, 500, 502, 503, 504) and attempt < self.max_retries - 1:
+                    time.sleep(2 * (attempt + 1))
+                    continue
 
+                response.raise_for_status()
+                return self.extract_response_text(response.json())
+            except requests.Timeout as exc:
+                last_error = RuntimeError('Gemini request timed out')
+            except requests.RequestException as exc:
+                detail = ''
+                if exc.response is not None:
+                    try:
+                        detail = exc.response.json().get('error', {}).get('message', '')
+                    except Exception:
+                        detail = exc.response.text[:300]
+                last_error = RuntimeError(detail or f'Gemini request failed: {exc}')
             except Exception as exc:
-                error_str = str(exc)
+                last_error = RuntimeError(str(exc))
 
-                if '429' in error_str or 'RESOURCE_EXHAUSTED' in error_str:
-                    if attempt < self.max_retries - 1:
-                        wait_time = min(60, self.retry_delay * (2 ** attempt))
-                        time.sleep(wait_time)
-                        continue
+            if attempt < self.max_retries - 1:
+                time.sleep(1.5)
 
-                return f"Error: {error_str}"
+        raise last_error or RuntimeError('Gemini request failed')
 
-        return "Error: Max retries exceeded"
+    def build_summary_prompt(self, text: str, title: str) -> str:
+        return f"""You are summarizing a regulatory compliance circular for an academic institution.
 
-    def summarize_chunk(self, text: str) -> str:
-        prompt = f"""Extract compliance facts from this document section.
-
-TEXT:
-{text}
-
-Extract ONLY:
-- Key requirements
-- Programs/institutes
-- Deadlines/dates
-- Rules/exceptions
-- Numbers/percentages
-
-One line per fact."""
-
-        return self.call_model(prompt, max_tokens=2000)
-
-    def summarize_long_document(self, text: str, title: str = "") -> str:
-        chunks = self.chunk_text(text)
-
-        if len(chunks) == 1:
-            facts = self.summarize_chunk(text)
-        else:
-            chunk_facts = []
-
-            for chunk in chunks:
-                facts = self.summarize_chunk(chunk)
-                if facts and not facts.startswith("Error"):
-                    chunk_facts.append(facts)
-
-            facts = "\n".join(chunk_facts)
-
-        consolidation_prompt = f"""Create a structured compliance summary.
-
-TITLE: {title}
-
-FACTS:
-{facts}
-
-Return:
+Create a concise markdown summary using exactly these headings:
 
 ## EXECUTIVE SUMMARY
 2-3 sentences.
 
-## REQUIREMENTS
-All key rules.
+## KEY REQUIREMENTS
+Bullet points for the major actions, rules, numbers, and eligibility conditions.
 
-## PROGRAMS/INSTITUTES
+## DEADLINES
+Bullet points for any dates, timelines, last dates, or mention "Not explicitly stated."
 
-## EFFECTIVE DATE
+## RESPONSIBLE PARTIES
+Bullet points for who needs to act or who is affected.
 
 ## COMPLIANCE NOTES
+Bullet points for exceptions, fees, approvals, supporting documents, or operational notes.
+
+TITLE: {title}
+
+DOCUMENT TEXT:
+{text}
 """
 
-        final_summary = self.call_model(consolidation_prompt, max_tokens=15000)
-        return self.format_summary(final_summary)
+    def build_fallback_summary(self, text: str, title: str = "") -> str:
+        normalized = self.normalize_text(text)
+        lines = [line.strip() for line in normalized.splitlines() if line.strip()]
+
+        sentence_candidates = re.split(r'(?<=[.!?])\s+', normalized[:2500])
+        executive = ' '.join(sentence_candidates[:2]).strip() or (lines[0] if lines else 'No readable text extracted.')
+
+        requirement_keywords = ('must', 'shall', 'required', 'submit', 'compliance', 'approval', 'eligibility')
+        requirement_lines = []
+        seen_requirements = set()
+        for line in lines:
+            lowered = line.lower()
+            if any(keyword in lowered for keyword in requirement_keywords) and line not in seen_requirements:
+                requirement_lines.append(line)
+                seen_requirements.add(line)
+            if len(requirement_lines) >= 6:
+                break
+
+        date_patterns = [
+            r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b',
+            r'\b\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}\b',
+            r'\b[A-Za-z]{3,9}\s+\d{1,2},\s+\d{4}\b',
+        ]
+        dates = OrderedDict()
+        for pattern in date_patterns:
+            for match in re.findall(pattern, normalized):
+                dates[match] = None
+
+        party_keywords = ('admin', 'principal', 'hod', 'faculty', 'department', 'institute', 'institution', 'college')
+        parties = []
+        seen_parties = set()
+        for line in lines:
+            lowered = line.lower()
+            if any(keyword in lowered for keyword in party_keywords) and line not in seen_parties:
+                parties.append(line)
+                seen_parties.add(line)
+            if len(parties) >= 5:
+                break
+
+        notes = []
+        if title:
+            notes.append(f'Document title: {title}')
+        notes.append('Summary generated directly from extracted document text.')
+        if len(normalized) > self.max_input_chars:
+            notes.append('A condensed portion of the document was used to keep the summary responsive.')
+
+        def bullet_block(items, fallback):
+            values = items if items else [fallback]
+            return '\n'.join(f'- {item}' for item in values)
+
+        return '\n\n'.join([
+            '## EXECUTIVE SUMMARY',
+            executive,
+            '## KEY REQUIREMENTS',
+            bullet_block(requirement_lines, 'No explicit requirements were automatically extracted.'),
+            '## DEADLINES',
+            bullet_block(list(dates.keys())[:6], 'Not explicitly stated.'),
+            '## RESPONSIBLE PARTIES',
+            bullet_block(parties, 'Not explicitly stated.'),
+            '## COMPLIANCE NOTES',
+            bullet_block(notes, 'No additional notes extracted.'),
+        ]).strip()
+
+    def summarize_long_document(self, text: str, title: str = "") -> tuple[str, str]:
+        prepared_text = self.chunk_text(text)
+        prompt = self.build_summary_prompt(prepared_text, title)
+
+        try:
+            summary = self.call_model(prompt, max_tokens=1400)
+            return self.format_summary(summary), 'ai'
+        except Exception:
+            return self.build_fallback_summary(text, title), 'fallback'
 
 
-def summarize_document(text: str, title: str = "", api_key: str = None) -> str:
-    if not api_key:
-        raise ValueError("Gemini API key required")
-
+def summarize_document(text: str, title: str = "", api_key: str = None) -> tuple[str, str]:
     summarizer = ComplianceSummarizer(api_key)
     return summarizer.summarize_long_document(text, title)

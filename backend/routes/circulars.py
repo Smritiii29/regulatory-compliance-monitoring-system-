@@ -1,274 +1,121 @@
-# import os
-# from flask import Blueprint, request, jsonify, current_app, send_from_directory
-# from flask_jwt_extended import jwt_required, get_jwt_identity
-# from werkzeug.utils import secure_filename
-# from models import db, Circular, User, Notification, ActivityLog, Submission
-# from datetime import datetime
-# from utils.categorizer import auto_categorize
-# from utils.deadline_parser import extract_deadline
-# from utils.email_sender import send_notification_email
-
-# circulars_bp = Blueprint('circulars', __name__)
-
-# CATEGORIES = [
-#     'Regulation Update', 'Hackathon Event', 'Workshop / Seminar',
-#     'Curriculum Update', 'Infrastructure', 'Faculty Development',
-#     'Student Activities', 'Audit & Accreditation', 'Examination',
-#     'Research & Innovation', 'Placement & Internship', 'Other'
-# ]
-
-# # ── Upload circular (admin only) ─────────────────────────────────────
-
-# @circulars_bp.route('', methods=['POST'])
-# @jwt_required()
-# def create_circular():
-#     uid = int(get_jwt_identity())
-#     user = User.query.get_or_404(uid)
-#     if user.role not in ('admin', 'principal'):
-#         return jsonify({'error': 'Only admin/principal can upload circulars'}), 403
-
-#     title = request.form.get('title', '').strip()
-#     description = request.form.get('description', '').strip()
-#     category = request.form.get('category', '').strip()
-#     regulation_type = request.form.get('regulation_type', '').strip()
-#     deadline_str = request.form.get('deadline', '').strip()
-#     academic_year = request.form.get('academic_year', '').strip()
-#     priority = request.form.get('priority', 'medium').strip()
-#     target_departments = request.form.get('target_departments', 'all').strip()
-
-#     if not title:
-#         return jsonify({'error': 'Title is required'}), 400
-
-#     # Auto-categorize if not provided
-#     if not category:
-#         category = auto_categorize(title + ' ' + description)
-
-#     # Parse deadline
-#     deadline = None
-#     if deadline_str:
-#         try:
-#             deadline = datetime.fromisoformat(deadline_str)
-#         except ValueError:
-#             deadline = extract_deadline(deadline_str)
-#     else:
-#         deadline = extract_deadline(title + ' ' + description)
-
-#     # Handle file upload
-#     file_path = None
-#     file_name = None
-#     if 'file' in request.files:
-#         f = request.files['file']
-#         if f.filename:
-#             file_name = secure_filename(f.filename)
-#             upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'circulars')
-#             os.makedirs(upload_dir, exist_ok=True)
-#             file_path = os.path.join(upload_dir, f'{datetime.utcnow().strftime("%Y%m%d%H%M%S")}_{file_name}')
-#             f.save(file_path)
-
-#     circular = Circular(
-#         title=title, description=description, category=category,
-#         regulation_type=regulation_type, deadline=deadline,
-#         academic_year=academic_year, priority=priority,
-#         target_departments=target_departments, file_path=file_path,
-#         file_name=file_name, uploaded_by=uid,
-#     )
-#     db.session.add(circular)
-#     db.session.flush()
-
-#     # Notify targeted users
-#     if target_departments == 'all':
-#         targets = User.query.filter(User.id != uid, User.is_active == True).all()
-#     else:
-#         depts = [d.strip() for d in target_departments.split(',')]
-#         targets = User.query.filter(
-#             User.department.in_(depts), User.id != uid, User.is_active == True
-#         ).all()
-
-#     for t in targets:
-#         notif_msg = f'{category} circular published. {"Deadline: " + deadline.strftime("%d %b %Y") if deadline else "No deadline set."}'
-#         n = Notification(
-#             user_id=t.id, title=f'New Circular: {title}',
-#             message=notif_msg,
-#             type='circular', circular_id=circular.id,
-#         )
-#         db.session.add(n)
-#         # Also send email notification
-#         send_notification_email(t.email, t.name, f'New Circular: {title}', notif_msg)
-
-#     log = ActivityLog(user_id=uid, action='create_circular', entity_type='circular',
-#                       entity_id=circular.id, details=f'Uploaded circular: {title}')
-#     db.session.add(log)
-#     db.session.commit()
-
-#     return jsonify(circular.to_dict()), 201
-
-# # ── List circulars ───────────────────────────────────────────────────
-
-# @circulars_bp.route('', methods=['GET'])
-# @jwt_required()
-# def list_circulars():
-#     uid = int(get_jwt_identity())
-#     user = User.query.get_or_404(uid)
-
-#     query = Circular.query
-
-#     # Filters
-#     category = request.args.get('category')
-#     status = request.args.get('status')
-#     regulation = request.args.get('regulation_type')
-#     search = request.args.get('search', '').strip()
-#     academic_year = request.args.get('academic_year')
-
-#     if category:
-#         query = query.filter(Circular.category == category)
-#     if status:
-#         query = query.filter(Circular.status == status)
-#     if regulation:
-#         query = query.filter(Circular.regulation_type == regulation)
-#     if academic_year:
-#         query = query.filter(Circular.academic_year == academic_year)
-#     if search:
-#         pattern = f'%{search}%'
-#         query = query.filter(
-#             db.or_(Circular.title.ilike(pattern), Circular.description.ilike(pattern),
-#                    Circular.category.ilike(pattern))
-#         )
-
-#     # For HOD/faculty, filter by their department
-#     if user.role in ('hod', 'faculty') and user.department:
-#         query = query.filter(
-#             db.or_(
-#                 Circular.target_departments == 'all',
-#                 Circular.target_departments.ilike(f'%{user.department}%')
-#             )
-#         )
-
-#     circulars = query.order_by(Circular.created_at.desc()).all()
-#     result = []
-#     for c in circulars:
-#         d = c.to_dict()
-#         # Check if current user has submitted
-#         sub = Submission.query.filter_by(circular_id=c.id, user_id=uid).first()
-#         d['my_submission'] = sub.to_dict() if sub else None
-#         result.append(d)
-
-#     return jsonify(result)
-
-# # ── Get single circular ─────────────────────────────────────────────
-
-# @circulars_bp.route('/<int:circular_id>', methods=['GET'])
-# @jwt_required()
-# def get_circular(circular_id):
-#     uid = int(get_jwt_identity())
-#     circular = Circular.query.get_or_404(circular_id)
-#     d = circular.to_dict()
-#     sub = Submission.query.filter_by(circular_id=circular_id, user_id=uid).first()
-#     d['my_submission'] = sub.to_dict() if sub else None
-#     d['all_submissions'] = [s.to_dict() for s in circular.submissions]
-#     return jsonify(d)
-
-# # ── Update circular ──────────────────────────────────────────────────
-
-# @circulars_bp.route('/<int:circular_id>', methods=['PUT'])
-# @jwt_required()
-# def update_circular(circular_id):
-#     uid = int(get_jwt_identity())
-#     user = User.query.get_or_404(uid)
-#     if user.role not in ('admin', 'principal'):
-#         return jsonify({'error': 'Access denied'}), 403
-
-#     circular = Circular.query.get_or_404(circular_id)
-#     data = request.get_json()
-
-#     for field in ('title', 'description', 'category', 'regulation_type',
-#                   'priority', 'status', 'target_departments', 'academic_year'):
-#         if field in data:
-#             setattr(circular, field, data[field])
-#     if 'deadline' in data and data['deadline']:
-#         try:
-#             circular.deadline = datetime.fromisoformat(data['deadline'])
-#         except ValueError:
-#             pass
-
-#     db.session.commit()
-#     return jsonify(circular.to_dict())
-
-# # ── Delete circular ──────────────────────────────────────────────────
-
-# @circulars_bp.route('/<int:circular_id>', methods=['DELETE'])
-# @jwt_required()
-# def delete_circular(circular_id):
-#     uid = int(get_jwt_identity())
-#     user = User.query.get_or_404(uid)
-#     if user.role not in ('admin', 'principal'):
-#         return jsonify({'error': 'Access denied'}), 403
-
-#     circular = Circular.query.get_or_404(circular_id)
-#     db.session.delete(circular)
-#     log = ActivityLog(user_id=uid, action='delete_circular', entity_type='circular',
-#                       entity_id=circular_id, details=f'Deleted circular: {circular.title}')
-#     db.session.add(log)
-#     db.session.commit()
-#     return jsonify({'message': 'Circular deleted'})
-
-# # ── Download circular file ───────────────────────────────────────────
-
-# @circulars_bp.route('/<int:circular_id>/download', methods=['GET'])
-# @jwt_required()
-# def download_circular(circular_id):
-#     circular = Circular.query.get_or_404(circular_id)
-#     if not circular.file_path or not os.path.exists(circular.file_path):
-#         return jsonify({'error': 'File not found'}), 404
-#     directory = os.path.dirname(circular.file_path)
-#     filename = os.path.basename(circular.file_path)
-#     return send_from_directory(directory, filename, as_attachment=True,
-#                                download_name=circular.file_name)
-
-# # ── Category summary ────────────────────────────────────────────────
-
-# @circulars_bp.route('/categories/summary', methods=['GET'])
-# @jwt_required()
-# def category_summary():
-#     results = []
-#     for cat in CATEGORIES:
-#         circulars = Circular.query.filter_by(category=cat).all()
-#         total = len(circulars)
-#         active = len([c for c in circulars if c.status == 'active'])
-#         completed = len([c for c in circulars if c.status == 'completed'])
-#         total_subs = sum(len(c.submissions) for c in circulars)
-#         approved_subs = sum(len([s for s in c.submissions if s.status == 'approved']) for c in circulars)
-
-#         results.append({
-#             'category': cat,
-#             'total': total,
-#             'active': active,
-#             'completed': completed,
-#             'total_submissions': total_subs,
-#             'approved_submissions': approved_subs,
-#             'compliance_rate': round(approved_subs / total_subs * 100, 1) if total_subs > 0 else 0,
-#         })
-#     return jsonify(results)
 import os
-from flask import Blueprint, request, jsonify, current_app, send_from_directory
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from werkzeug.utils import secure_filename
-from models import db, Circular, User, Notification, ActivityLog, Submission
 from datetime import datetime
+
+from flask import Blueprint, current_app, jsonify, request, send_from_directory
+from flask_jwt_extended import get_jwt_identity, jwt_required
+from sqlalchemy import or_
+from werkzeug.utils import secure_filename
+
+from models import ActivityLog, Circular, Notification, Submission, User, db
 from utils.categorizer import auto_categorize
 from utils.deadline_parser import extract_deadline
 from utils.email_sender import send_notification_email
 
 circulars_bp = Blueprint('circulars', __name__)
 
-# ── Upload circular (admin only) ─────────────────────────────────────
+CATEGORIES = [
+    'Regulation Update',
+    'Hackathon Event',
+    'Workshop / Seminar',
+    'Curriculum Update',
+    'Infrastructure',
+    'Faculty Development',
+    'Student Activities',
+    'Audit & Accreditation',
+    'Examination',
+    'Research & Innovation',
+    'Placement & Internship',
+    'Other',
+]
 
+
+def current_user():
+    return User.query.get_or_404(int(get_jwt_identity()))
+
+
+def parse_deadline(deadline_str: str, fallback_text: str = ''):
+    if deadline_str:
+        try:
+            return datetime.fromisoformat(deadline_str)
+        except ValueError:
+            return extract_deadline(deadline_str)
+
+    return extract_deadline(fallback_text)
+
+
+def visible_circulars_query(user: User):
+    query = Circular.query
+
+    if user.role in ('admin', 'principal'):
+        return query
+
+    if user.department:
+        return query.filter(
+            or_(
+                Circular.target_departments == 'all',
+                Circular.target_departments.ilike(f'%{user.department}%'),
+            )
+        )
+
+    return query.filter(Circular.target_departments == 'all')
+
+
+def serialize_circular(circular: Circular, user_id: int):
+    payload = circular.to_dict()
+    submission = Submission.query.filter_by(circular_id=circular.id, user_id=user_id).first()
+    payload['my_submission'] = submission.to_dict() if submission else None
+    return payload
+
+
+def target_users_for_circular(uploader_id: int, target_departments: str):
+    if target_departments == 'all':
+        return User.query.filter(User.id != uploader_id, User.is_active.is_(True)).all()
+
+    departments = [dept.strip() for dept in target_departments.split(',') if dept.strip()]
+    if not departments:
+        return []
+
+    return User.query.filter(
+        User.department.in_(departments),
+        User.id != uploader_id,
+        User.is_active.is_(True),
+    ).all()
+
+
+def summary_cache_path(circular_id: int) -> str:
+    cache_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'summaries')
+    os.makedirs(cache_dir, exist_ok=True)
+    return os.path.join(cache_dir, f'{circular_id}.md')
+
+
+def get_cached_summary(circular: Circular) -> str | None:
+    cache_path = summary_cache_path(circular.id)
+    if not os.path.exists(cache_path):
+        return None
+
+    cache_mtime = os.path.getmtime(cache_path)
+    circular_mtime = circular.updated_at.timestamp() if circular.updated_at else 0
+    file_mtime = 0
+    if circular.file_path and os.path.exists(circular.file_path):
+        file_mtime = os.path.getmtime(circular.file_path)
+
+    if cache_mtime < max(circular_mtime, file_mtime):
+        return None
+
+    with open(cache_path, 'r', encoding='utf-8') as handle:
+        return handle.read().strip()
+
+
+def cache_summary(circular: Circular, summary: str):
+    with open(summary_cache_path(circular.id), 'w', encoding='utf-8') as handle:
+        handle.write(summary)
+
+
+@circulars_bp.route('', methods=['POST'])
 @circulars_bp.route('/create', methods=['POST'])
 @jwt_required()
 def create_circular():
-    print("REQUEST RECEIVED:", request.method)
-    uid = int(get_jwt_identity())
-    user = User.query.get_or_404(uid)
-
+    user = current_user()
     if user.role not in ('admin', 'principal'):
         return jsonify({'error': 'Only admin/principal can upload circulars'}), 403
 
@@ -279,42 +126,29 @@ def create_circular():
     deadline_str = request.form.get('deadline', '').strip()
     academic_year = request.form.get('academic_year', '').strip()
     priority = request.form.get('priority', 'medium').strip()
-    target_departments = request.form.get('target_departments', 'all').strip()
+    target_departments = request.form.get('target_departments', 'all').strip() or 'all'
 
     if not title:
         return jsonify({'error': 'Title is required'}), 400
 
-    # Auto categorize
     if not category:
-        category = auto_categorize(title + ' ' + description)
+        category = auto_categorize(f'{title} {description}')
 
-    # Deadline parsing
-    deadline = None
-    if deadline_str:
-        try:
-            deadline = datetime.fromisoformat(deadline_str)
-        except:
-            deadline = extract_deadline(deadline_str)
-    else:
-        deadline = extract_deadline(title + ' ' + description)
+    deadline = parse_deadline(deadline_str, f'{title} {description}')
 
-    # File upload
     file_path = None
     file_name = None
+    uploaded_file = request.files.get('file')
+    if uploaded_file and uploaded_file.filename:
+        file_name = secure_filename(uploaded_file.filename)
+        upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'circulars')
+        os.makedirs(upload_dir, exist_ok=True)
+        file_path = os.path.join(
+            upload_dir,
+            f'{datetime.utcnow().strftime("%Y%m%d%H%M%S")}_{file_name}',
+        )
+        uploaded_file.save(file_path)
 
-    if 'file' in request.files:
-        f = request.files['file']
-        if f.filename:
-            file_name = secure_filename(f.filename)
-            upload_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'circulars')
-            os.makedirs(upload_dir, exist_ok=True)
-            file_path = os.path.join(
-                upload_dir,
-                f'{datetime.utcnow().strftime("%Y%m%d%H%M%S")}_{file_name}'
-            )
-            f.save(file_path)
-
-    # Save circular
     circular = Circular(
         title=title,
         description=description,
@@ -326,158 +160,276 @@ def create_circular():
         target_departments=target_departments,
         file_path=file_path,
         file_name=file_name,
-        uploaded_by=uid
+        uploaded_by=user.id,
     )
-
     db.session.add(circular)
     db.session.flush()
 
-    # ─────────────────────────────
-    # 🔔 NOTIFICATIONS + EMAIL
-    # ─────────────────────────────
-
-    if target_departments == 'all':
-        targets = User.query.filter(User.id != uid, User.is_active == True).all()
-    else:
-        depts = [d.strip() for d in target_departments.split(',')]
-        targets = User.query.filter(
-            User.department.in_(depts),
-            User.id != uid,
-            User.is_active == True
-        ).all()
-
-    for t in targets:
-        notif_msg = f'{category} circular published. '
-
-        if deadline:
-            notif_msg += f'Deadline: {deadline.strftime("%d %b %Y")}'
-        else:
-            notif_msg += 'No deadline set.'
-
-        # 🔔 Create DB notification
-        notification = Notification(
-            user_id=t.id,
-            circular_id=circular.id,
-            title=f'New Circular: {title}',
-            message=notif_msg,
-            type='circular',
-            is_read=False
-        )
-
-        db.session.add(notification)
-
-        # 📧 Send EMAIL
-        send_notification_email(
-            to_email=t.email,
-            name=t.name,
-            title=f'New Circular: {title}',
-            message=notif_msg
-        )
-
-    # Activity log
-    log = ActivityLog(
-        user_id=uid,
-        action='create_circular',
-        entity_type='circular',
-        entity_id=circular.id,
-        details=f'Uploaded circular: {title}'
+    notification_message = f'{category} circular published. '
+    notification_message += (
+        f'Deadline: {deadline.strftime("%d %b %Y")}' if deadline else 'No deadline set.'
     )
 
-    db.session.add(log)
+    for target in target_users_for_circular(user.id, target_departments):
+        db.session.add(
+            Notification(
+                user_id=target.id,
+                circular_id=circular.id,
+                title=f'New Circular: {title}',
+                message=notification_message,
+                type='circular',
+                is_read=False,
+            )
+        )
+        send_notification_email(
+            to_email=target.email,
+            name=target.name,
+            title=f'New Circular: {title}',
+            message=notification_message,
+        )
+
+    db.session.add(
+        ActivityLog(
+            user_id=user.id,
+            action='create_circular',
+            entity_type='circular',
+            entity_id=circular.id,
+            details=f'Uploaded circular: {title}',
+        )
+    )
     db.session.commit()
 
     return jsonify(circular.to_dict()), 201
+
+
+@circulars_bp.route('', methods=['GET'])
 @circulars_bp.route('/list', methods=['GET'])
 @jwt_required()
 def list_circulars():
-    uid = int(get_jwt_identity())
-    user = User.query.get_or_404(uid)
+    user = current_user()
+    query = visible_circulars_query(user)
 
-    print("LIST CIRCULARS CALLED")
+    category = request.args.get('category', '').strip()
+    status = request.args.get('status', '').strip()
+    regulation_type = request.args.get('regulation_type', '').strip()
+    academic_year = request.args.get('academic_year', '').strip()
+    search = request.args.get('search', '').strip()
 
-    # Admin / principal → see all
-    if user.role in ('admin', 'principal'):
-        circulars = Circular.query.order_by(Circular.created_at.desc()).all()
+    if category and category not in ('all', 'all_categories'):
+        query = query.filter(Circular.category == category)
+    if status and status not in ('all', 'all_statuses'):
+        query = query.filter(Circular.status == status)
+    if regulation_type and regulation_type not in ('all', 'all_regulations'):
+        query = query.filter(Circular.regulation_type == regulation_type)
+    if academic_year and academic_year not in ('all', 'all_years'):
+        query = query.filter(Circular.academic_year == academic_year)
+    if search:
+        pattern = f'%{search}%'
+        query = query.filter(
+            or_(
+                Circular.title.ilike(pattern),
+                Circular.description.ilike(pattern),
+                Circular.category.ilike(pattern),
+                Circular.regulation_type.ilike(pattern),
+            )
+        )
 
-    else:
-        circulars = Circular.query.filter(
-            (Circular.target_departments == 'all') |
-            (Circular.target_departments.ilike(f"%{user.department}%"))
-        ).order_by(Circular.created_at.desc()).all()
+    circulars = query.order_by(Circular.created_at.desc()).all()
+    return jsonify([serialize_circular(circular, user.id) for circular in circulars]), 200
 
-    return jsonify([c.to_dict() for c in circulars]), 200
 
-# ── Summarize circular document ──────────────────────────────────────
+@circulars_bp.route('/<int:circular_id>', methods=['GET'])
+@jwt_required()
+def get_circular(circular_id):
+    user = current_user()
+    circular = visible_circulars_query(user).filter(Circular.id == circular_id).first_or_404()
+
+    payload = serialize_circular(circular, user.id)
+    payload['all_submissions'] = [submission.to_dict() for submission in circular.submissions]
+    return jsonify(payload)
+
+
+@circulars_bp.route('/<int:circular_id>', methods=['PUT'])
+@jwt_required()
+def update_circular(circular_id):
+    user = current_user()
+    if user.role not in ('admin', 'principal'):
+        return jsonify({'error': 'Access denied'}), 403
+
+    circular = Circular.query.get_or_404(circular_id)
+    data = request.get_json() or {}
+
+    for field in (
+        'title',
+        'description',
+        'category',
+        'regulation_type',
+        'priority',
+        'status',
+        'target_departments',
+        'academic_year',
+    ):
+        if field in data:
+            value = data[field]
+            if field == 'target_departments' and not value:
+                value = 'all'
+            if field == 'academic_year' and value == '':
+                value = None
+            setattr(circular, field, value)
+
+    if 'deadline' in data:
+        circular.deadline = parse_deadline(data.get('deadline') or '')
+
+    db.session.add(
+        ActivityLog(
+            user_id=user.id,
+            action='update_circular',
+            entity_type='circular',
+            entity_id=circular.id,
+            details=f'Updated circular: {circular.title}',
+        )
+    )
+    db.session.commit()
+
+    return jsonify(circular.to_dict())
+
+
+@circulars_bp.route('/<int:circular_id>', methods=['DELETE'])
+@jwt_required()
+def delete_circular(circular_id):
+    user = current_user()
+    if user.role not in ('admin', 'principal'):
+        return jsonify({'error': 'Access denied'}), 403
+
+    circular = Circular.query.get_or_404(circular_id)
+    circular_title = circular.title
+
+    Notification.query.filter_by(circular_id=circular_id).delete()
+    Submission.query.filter_by(circular_id=circular_id).delete()
+
+    db.session.delete(circular)
+    db.session.add(
+        ActivityLog(
+            user_id=user.id,
+            action='delete_circular',
+            entity_type='circular',
+            entity_id=circular_id,
+            details=f'Deleted circular: {circular_title}',
+        )
+    )
+    db.session.commit()
+
+    return jsonify({'message': 'Circular deleted'})
+
+
+@circulars_bp.route('/categories/summary', methods=['GET'])
+@jwt_required()
+def category_summary():
+    user = current_user()
+    visible_circulars = visible_circulars_query(user).all()
+    visible_by_category = {category: [] for category in CATEGORIES}
+
+    for circular in visible_circulars:
+        visible_by_category.setdefault(circular.category or 'Other', []).append(circular)
+
+    results = []
+    for category, circulars in visible_by_category.items():
+        total = len(circulars)
+        active = len([item for item in circulars if item.status == 'active'])
+        completed = len([item for item in circulars if item.status == 'completed'])
+        total_submissions = sum(len(item.submissions) for item in circulars)
+        approved_submissions = sum(
+            len([submission for submission in item.submissions if submission.status == 'approved'])
+            for item in circulars
+        )
+
+        results.append(
+            {
+                'category': category,
+                'total': total,
+                'active': active,
+                'completed': completed,
+                'total_submissions': total_submissions,
+                'approved_submissions': approved_submissions,
+                'compliance_rate': (
+                    round(approved_submissions / total_submissions * 100, 1)
+                    if total_submissions > 0
+                    else 0
+                ),
+            }
+        )
+
+    return jsonify(results)
+
 
 @circulars_bp.route('/<int:circular_id>/summarize', methods=['POST'])
 @jwt_required()
 def summarize_circular(circular_id):
-    """Generate AI summary of circular document."""
     try:
-        # Get circular
-        circular = Circular.query.get_or_404(circular_id)
+        user = current_user()
+        circular = visible_circulars_query(user).filter(Circular.id == circular_id).first_or_404()
 
-        # Check if PDF/DOCX exists
+        cached = get_cached_summary(circular)
+        if cached:
+            return jsonify({'summary': cached, 'source': 'cache'}), 200
+
         if not circular.file_path or not circular.file_name:
             return jsonify({'error': 'No document attached to this circular'}), 400
 
         if not circular.file_name.lower().endswith(('.pdf', '.docx')):
             return jsonify({'error': 'Only PDF and DOCX files can be summarized'}), 400
 
-        # Extract text
         try:
             from utils.pdf_extractor import extract_text
+
             text = extract_text(circular.file_path)
             if not text.strip():
                 return jsonify({'error': 'Could not extract text from document'}), 400
-        except Exception as e:
-            return jsonify({'error': f'Error extracting text: {str(e)}'}), 500
+        except Exception as exc:
+            return jsonify({'error': f'Error extracting text: {str(exc)}'}), 500
 
-        # Generate summary
         try:
             from utils.ai_summarizer import summarize_document
+
             api_key = current_app.config.get('GEMINI_API_KEY')
             if not api_key:
                 return jsonify({'error': 'AI service not configured'}), 500
 
-            summary = summarize_document(text, circular.title, api_key)
+            summary, source = summarize_document(text, circular.title, api_key)
+        except Exception as exc:
+            return jsonify({'error': f'Error generating summary: {str(exc)}'}), 500
 
-        except Exception as e:
-            return jsonify({'error': f'Error generating summary: {str(e)}'}), 500
+        if summary:
+            cache_summary(circular, summary)
 
-        # Log the activity
-        uid = get_jwt_identity()
-        log = ActivityLog(
-            user_id=int(uid),
-            action='summarize_circular',
-            entity_type='circular',
-            entity_id=circular_id,
-            details=f'Generated AI summary for: {circular.title}'
+        db.session.add(
+            ActivityLog(
+                user_id=user.id,
+                action='summarize_circular',
+                entity_type='circular',
+                entity_id=circular_id,
+                details=f'Generated AI summary for: {circular.title}',
+            )
         )
-        db.session.add(log)
         db.session.commit()
 
-        return jsonify({'summary': summary}), 200
+        return jsonify({'summary': summary, 'source': source}), 200
+    except Exception as exc:
+        return jsonify({'error': f'Unexpected error: {str(exc)}'}), 500
 
-    except Exception as e:
-        return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
-    
-# ── Download circular document ──────────────────────────────────────
 
 @circulars_bp.route('/<int:circular_id>/download', methods=['GET'])
 @jwt_required()
 def download_circular(circular_id):
     circular = Circular.query.get_or_404(circular_id)
-
     if not circular.file_path or not os.path.exists(circular.file_path):
         return jsonify({'error': 'File not found'}), 404
 
     directory = os.path.dirname(circular.file_path)
     filename = os.path.basename(circular.file_path)
-
     return send_from_directory(
         directory,
         filename,
         as_attachment=True,
-        download_name=circular.file_name
+        download_name=circular.file_name,
     )

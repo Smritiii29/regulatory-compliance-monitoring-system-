@@ -280,15 +280,78 @@ import sys
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from sqlalchemy import inspect, text
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import Config
-from models import db
+from models import User, db
 
 # 🔥 Import scheduler
 from services.scheduler import start_scheduler
+
+
+def ensure_schema_compatibility():
+    inspector = inspect(db.engine)
+
+    if 'users' not in inspector.get_table_names():
+        return
+
+    columns = {column['name'] for column in inspector.get_columns('users')}
+    if 'password_hash' in columns:
+        return
+
+    with db.engine.begin() as connection:
+        connection.execute(text('ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)'))
+
+
+def default_name_for_account(email: str, role: str) -> str:
+    labels = {
+        'admin': 'RCMS Admin',
+        'faculty': 'RCMS Faculty',
+        'hod': 'RCMS HOD',
+        'principal': 'RCMS Principal',
+    }
+    return labels.get(role, email.split('@')[0].replace('.', ' ').replace('_', ' ').title())
+
+
+def sync_authorized_login_users(app: Flask):
+    authorized_accounts = app.config.get('AUTHORIZED_LOGIN_USER_MAP', {})
+    if not authorized_accounts:
+        return
+
+    for email, account in authorized_accounts.items():
+        role = account.get('role') or 'faculty'
+        password = account.get('password') or ''
+        department = account.get('department')
+
+        user = User.query.filter_by(email=email).first()
+        if user is None:
+            user = User(
+                name=default_name_for_account(email, role),
+                email=email,
+                role=role,
+                department=department,
+                is_active=True,
+                is_verified=True,
+            )
+        elif not user.name:
+            user.name = default_name_for_account(email, role)
+
+        user.role = role
+        if department:
+            user.department = department
+        user.is_active = True
+        user.is_verified = True
+
+        if password and (not user.password_hash or not check_password_hash(user.password_hash, password)):
+            user.password_hash = generate_password_hash(password)
+
+        db.session.add(user)
+
+    db.session.commit()
 
 
 def create_app():
@@ -335,6 +398,8 @@ def create_app():
     # ── Create DB tables ─────────────────────────────
     with app.app_context():
         db.create_all()
+        ensure_schema_compatibility()
+        sync_authorized_login_users(app)
 
     # 🔥 START SCHEDULER
     start_scheduler(app)
