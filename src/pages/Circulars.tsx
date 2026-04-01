@@ -85,6 +85,33 @@ const Circulars = () => {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
     }
   };
+  const handleDownload = async (id: number, fileName: string) => {
+    try {
+    const token = localStorage.getItem("rcms_token");
+
+    const res = await fetch(`http://localhost:5000/api/circulars/${id}/download`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) throw new Error("Download failed");
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName || "circular.pdf";
+    a.click();
+  } catch (err: any) {
+    toast({
+      title: "Download failed",
+      description: err.message,
+      variant: "destructive",
+    });
+  }
+};
 
   return (
     <div className="space-y-6">
@@ -175,10 +202,12 @@ const Circulars = () => {
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
                     {c.file_path && (
-                      <Button size="sm" variant="outline" asChild>
-                        <a href={circularsAPI.downloadUrl(c.id)} target="_blank" rel="noopener">
-                          <Download className="w-4 h-4 mr-1" /> Download
-                        </a>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownload(c.id, c.file_name)}
+                      >
+                        <Download className="w-4 h-4 mr-1" /> Download
                       </Button>
                     )}
                     {/* Submit proof button for non-admin */}
