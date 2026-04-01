@@ -461,3 +461,23 @@ def summarize_circular(circular_id):
 
     except Exception as e:
         return jsonify({'error': f'Unexpected error: {str(e)}'}), 500
+    
+# ── Download circular document ──────────────────────────────────────
+
+@circulars_bp.route('/<int:circular_id>/download', methods=['GET'])
+@jwt_required()
+def download_circular(circular_id):
+    circular = Circular.query.get_or_404(circular_id)
+
+    if not circular.file_path or not os.path.exists(circular.file_path):
+        return jsonify({'error': 'File not found'}), 404
+
+    directory = os.path.dirname(circular.file_path)
+    filename = os.path.basename(circular.file_path)
+
+    return send_from_directory(
+        directory,
+        filename,
+        as_attachment=True,
+        download_name=circular.file_name
+    )
