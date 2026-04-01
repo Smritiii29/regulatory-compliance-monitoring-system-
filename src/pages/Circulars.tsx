@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +35,9 @@ const Circulars = () => {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [selectedCircular, setSelectedCircular] = useState<any>(null);
+  const [summary, setSummary] = useState<string>('');
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryDialogOpen, setSummaryDialogOpen] = useState(false);
 
   const isAdminOrPrincipal = user?.role === 'admin' || user?.role === 'principal';
 
@@ -75,6 +78,86 @@ const Circulars = () => {
     }
   };
 
+  const markdownToHtml = (md: string) => {
+    if (!md) return '<p>No summary generated.</p>';
+
+    const escapeHtml = (str: string) =>
+      str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    const lines = md.split(/\r?\n/);
+    let html = '';
+    let inList = false;
+    let paragraphBuffer = '';
+
+    const flushParagraph = () => {
+      if (paragraphBuffer.trim()) {
+        html += `<p class="text-sm leading-6 text-slate-700 my-2">${escapeHtml(paragraphBuffer.trim())}</p>`;
+        paragraphBuffer = '';
+      }
+    };
+
+    const closeList = () => {
+      if (inList) {
+        html += '</ul>';
+        inList = false;
+      }
+    };
+
+    for (let rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) {
+        flushParagraph();
+        closeList();
+        continue;
+      }
+
+      const headingMatch = line.match(/^##\s+(.*)$/);
+      const bulletMatch = line.match(/^[-*+]\s+(.*)$/);
+
+      if (headingMatch) {
+        flushParagraph();
+        closeList();
+        html += `<h3 class="text-base font-bold mt-6 mb-2 border-b border-primary pb-2 text-slate-800">${escapeHtml(headingMatch[1].trim())}</h3>`;
+        continue;
+      }
+
+      if (bulletMatch) {
+        flushParagraph();
+        if (!inList) {
+          inList = true;
+          html += '<ul class="ml-5 list-disc space-y-1 my-2">';
+        }
+        html += `<li class="text-sm leading-6 text-slate-700">${escapeHtml(bulletMatch[1].trim())}</li>`;
+        continue;
+      }
+
+      if (paragraphBuffer) {
+        paragraphBuffer += ' ' + line;
+      } else {
+        paragraphBuffer = line;
+      }
+    }
+
+    flushParagraph();
+    closeList();
+    return html;
+  };
+
+  const renderSummary = () => {
+    const html = markdownToHtml(summary);
+    return (
+      <div className="prose prose-sm max-w-none text-sm leading-relaxed text-slate-900">
+        <div
+          className="max-w-none rounded-lg bg-white p-4 shadow-sm border border-slate-200"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      </div>
+    );
+  };
+
   const deleteCircular = async (id: number) => {
     if (!confirm('Delete this circular?')) return;
     try {
@@ -112,6 +195,32 @@ const Circulars = () => {
     });
   }
 };
+
+  const handleSummarize = async (circularId: number) => {
+    setSummaryLoading(true);
+    setSummaryDialogOpen(true);
+    try {
+      const response = await fetch(`http://localhost:5000/api/circulars/${circularId}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('rcms_token')}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setSummary(data.summary);
+      } else {
+        toast({ title: 'Error', description: data.error || 'Failed to generate summary', variant: 'destructive' });
+        setSummaryDialogOpen(false);
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Network error while generating summary', variant: 'destructive' });
+      setSummaryDialogOpen(false);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -210,6 +319,11 @@ const Circulars = () => {
                         <Download className="w-4 h-4 mr-1" /> Download
                       </Button>
                     )}
+                    {c.file_path && c.file_name && c.file_name.toLowerCase().endsWith('.pdf') && (
+                      <Button size="sm" variant="outline" onClick={() => handleSummarize(c.id)} disabled={summaryLoading}>
+                        <FileText className="w-4 h-4 mr-1" /> Summarize
+                      </Button>
+                    )}
                     {/* Submit proof button for non-admin */}
                     {!isAdminOrPrincipal && c.status === 'active' && !c.my_submission && (
                       <Button size="sm" onClick={() => { setSelectedCircular(c); setSubmitOpen(true); }}>
@@ -238,6 +352,26 @@ const Circulars = () => {
       <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
         <DialogContent>
           <SubmitProofForm circular={selectedCircular} onSuccess={() => { setSubmitOpen(false); fetchCirculars(); }} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Summary Dialog */}
+      <Dialog open={summaryDialogOpen} onOpenChange={setSummaryDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Document Summary</DialogTitle>
+            <DialogDescription>AI-generated compliance summary for the regulatory document</DialogDescription>
+          </DialogHeader>
+          {summaryLoading ? (
+            <div className="flex justify-center py-8">
+              <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+              <span className="ml-2">Generating summary...</span>
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-primary/50 scrollbar-track-slate-100 p-2">
+              {renderSummary()}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
