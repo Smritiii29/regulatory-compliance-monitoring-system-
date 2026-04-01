@@ -145,7 +145,7 @@ const Circulars = () => {
         <Card><CardContent className="py-12 text-center text-muted-foreground">No circulars found</CardContent></Card>
       ) : (
         <div className="space-y-4">
-          {circulars.map((c) => (
+          {Array.isArray(circulars) && circulars.map((c) => (
             <Card key={c.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between gap-4">

@@ -4,19 +4,27 @@ from datetime import datetime
 db = SQLAlchemy()
 
 # ── Users ──────────────────────────────────────────────────────────────
-
 class User(db.Model):
     __tablename__ = 'users'
+
     id = db.Column(db.Integer, primary_key=True)
+
     name = db.Column(db.String(120), nullable=False)
+
     email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # admin, principal, hod, faculty
+
+    role = db.Column(db.String(20), nullable=False)
+    # admin / principal / hod / faculty
+
     department = db.Column(db.String(100))
+
     is_active = db.Column(db.Boolean, default=True)
-    is_verified = db.Column(db.Boolean, default=True)  # True = real signup, False = seed/dummy
+
+    is_verified = db.Column(db.Boolean, default=True)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    # relationships
     submissions = db.relationship('Submission', foreign_keys='Submission.user_id', backref='user', lazy=True)
     sent_messages = db.relationship('ChatMessage', foreign_keys='ChatMessage.sender_id', backref='sender', lazy=True)
 
@@ -31,7 +39,6 @@ class User(db.Model):
             'is_verified': self.is_verified,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
-
 # ── Circulars ──────────────────────────────────────────────────────────
 
 class Circular(db.Model):

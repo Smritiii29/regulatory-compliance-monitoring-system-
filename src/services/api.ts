@@ -16,40 +16,84 @@ export function clearToken(): void {
 
 // ── Fetch wrapper ────────────────────────────────────────────────────
 
-async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> || {}),
+// async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
+//   const token = getToken();
+//   const headers: Record<string, string> = {
+//     ...(options.headers as Record<string, string> || {}),
+//   };
+//   if (token) {
+//     headers['Authorization'] = `Bearer ${token}`;
+//   }
+//   if (!(options.body instanceof FormData)) {
+//     headers['Content-Type'] = 'application/json';
+//   }
+
+//   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+
+//   if (res.status === 401) {
+//     clearToken();
+//     window.location.href = '/login';
+//     throw new Error('Unauthorized');
+//   }
+
+//   if (!res.ok) {
+//     const data = await res.json().catch(() => ({}));
+//     throw new Error(data.error || `Request failed (${res.status})`);
+//   }
+
+//   // Handle blob responses (PDF downloads)
+//   const contentType = res.headers.get('content-type');
+//   if (contentType && contentType.includes('application/pdf')) {
+//     return res.blob();
+//   }
+
+//   return res.json();
+// }
+const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const token = localStorage.getItem("rcms_token");
+
+  const headers: HeadersInit = {
+    ...(options.headers || {}),
   };
+
+  // Attach JWT
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
+
+  // Only set JSON header if NOT FormData
   if (!(options.body instanceof FormData)) {
-    headers['Content-Type'] = 'application/json';
+    headers["Content-Type"] = "application/json";
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  const response = await fetch(`${API_BASE}${url}`, {
+    ...options,
+    headers,
+  });
 
-  if (res.status === 401) {
-    clearToken();
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
+  // 🔥 HANDLE AUTH ERROR
+  if (response.status === 401) {
+    localStorage.removeItem("rcms_token");
+    window.location.href = "/login";
+    throw new Error("Unauthorized");
   }
 
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Request failed (${res.status})`);
+  // 🔥 HANDLE OTHER ERRORS
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    console.error("API ERROR:", errorData);
+
+    throw new Error(errorData.error || `Request failed (${response.status})`);
   }
 
-  // Handle blob responses (PDF downloads)
-  const contentType = res.headers.get('content-type');
-  if (contentType && contentType.includes('application/pdf')) {
-    return res.blob();
+  // Handle PDF
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/pdf")) {
+    return response.blob();
   }
 
-  return res.json();
-}
-
+  return response.json();
+};
 // ── Auth API ─────────────────────────────────────────────────────────
 
 export const authAPI = {
@@ -93,13 +137,13 @@ export const authAPI = {
 export const circularsAPI = {
   list: (params?: Record<string, string>) => {
     const qs = new URLSearchParams(params).toString();
-    return apiFetch(`/circulars${qs ? '?' + qs : ''}`);
+    return apiFetch(`/circulars/list${qs ? '?' + qs : ''}`);
   },
 
   get: (id: number) => apiFetch(`/circulars/${id}`),
 
   create: (formData: FormData) =>
-    apiFetch('/circulars', { method: 'POST', body: formData }),
+    apiFetch('/circulars/create', { method: 'POST', body: formData }),
 
   update: (id: number, data: Record<string, any>) =>
     apiFetch(`/circulars/${id}`, { method: 'PUT', body: JSON.stringify(data) }),

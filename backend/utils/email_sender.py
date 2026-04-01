@@ -118,3 +118,46 @@ def send_notification_email(to_email: str, name: str, title: str, message: str):
     </div>
     """
     send_email_async(to_email, subject, html)
+
+def send_circulars_email(to_email: str, name: str, circulars: list):
+    """Send email for newly detected AICTE circulars."""
+
+    subject = "RCMS – New AICTE Circulars Detected"
+
+    # Build list of circulars
+    items_html = ""
+    for c in circulars:
+        items_html += f"""
+        <li style="margin-bottom:10px;">
+            <strong>{c['title']}</strong><br>
+            <a href="{c['link']}" style="color:#2563eb;">View Circular</a>
+        </li>
+        """
+
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px;border:1px solid #e2e8f0;border-radius:8px;">
+        <h2 style="color:#1e3a5f;">New AICTE Circulars</h2>
+        
+        <p>Hello {name},</p>
+        
+        <p>The following new circulars have been released:</p>
+
+        <ul>
+            {items_html}
+        </ul>
+
+        <div style="margin:24px 0;text-align:center;">
+            <a href="{os.getenv('FRONTEND_URL', 'http://localhost:8080')}/dashboard"
+               style="background:#1e3a5f;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">
+                Open RCMS Dashboard
+            </a>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
+        <p style="color:#94a3b8;font-size:12px;text-align:center;">
+            Regulatory Compliance Monitoring System – SSN College of Engineering
+        </p>
+    </div>
+    """
+
+    send_email_async(to_email, subject, html)
