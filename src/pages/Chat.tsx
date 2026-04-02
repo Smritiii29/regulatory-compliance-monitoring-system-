@@ -169,7 +169,7 @@ const Chat = () => {
     if (!filename) return <FileText className="h-4 w-4" />;
 
     const ext = filename.split('.').pop()?.toLowerCase();
-    if (['pdf', 'doc', 'docx', 'xls', 'xlsx'].includes(ext || '')) {
+    if (['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'].includes(ext || '')) {
       return <FileText className="h-4 w-4" />;
     }
     if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(ext || '')) {
@@ -177,6 +177,9 @@ const Chat = () => {
     }
     return <FileText className="h-4 w-4" />;
   };
+
+  const isAttachmentMessage = (message: any) =>
+    ['file', 'document', 'image', 'video', 'audio'].includes(message.message_type);
 
   return (
     <div className="space-y-4">
@@ -321,26 +324,31 @@ const Chat = () => {
                                 {message.sender_name} ({message.sender_role})
                               </p>
                             )}
-                            {message.message_type === 'file' ? (
+
+                            {isAttachmentMessage(message) ? (
                               <div className="mb-1">
                                 <button
                                   type="button"
                                   onClick={() => handleDownload(message)}
-                                  className="flex items-center gap-2 text-blue-600 hover:underline"
+                                  className="flex max-w-full items-center gap-2 text-inherit hover:underline"
                                 >
                                   {getFileIcon(message.file_name)}
-                                  <span className="text-sm font-medium">
+                                  <span className="max-w-[220px] truncate text-sm font-medium">
                                     {message.file_name || 'Attachment'}
                                   </span>
-                                  <Download className="h-4 w-4" />
+                                  <Download className="h-4 w-4 shrink-0" />
                                 </button>
+
                                 {message.message && message.message !== `Attachment: ${message.file_name}` && (
-                                  <p className="mt-1 whitespace-pre-wrap text-sm">{message.message}</p>
+                                  <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+                                    {message.message}
+                                  </p>
                                 )}
                               </div>
                             ) : (
-                              <p className="whitespace-pre-wrap text-sm">{message.message}</p>
+                              <p className="whitespace-pre-wrap break-words text-sm">{message.message}</p>
                             )}
+
                             <p className="mt-1 text-xs opacity-50">
                               {new Date(message.created_at).toLocaleTimeString()}
                             </p>
@@ -366,56 +374,69 @@ const Chat = () => {
             </ScrollArea>
 
             {(selectedContact || selectedGroup) && (
-              <form onSubmit={sendMessage} className="flex items-center gap-2 border-t p-4">
-                <Input
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder={canSendToSelectedGroup ? 'Type a message...' : 'Only admin and principal can post here'}
-                  className="flex-1"
-                  autoFocus
-                  disabled={!canSendToSelectedGroup}
-                />
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg,.gif,.bmp,.webp,.svg,.mp4,.avi,.mkv,.mov,.wmv,.webm,.mp3,.wav,.ogg,.flac,.zip,.rar,.7z,.tar,.gz"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => fileInputRef.current?.click()}
-                  title="Attach file"
-                  disabled={!canSendToSelectedGroup}
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
+              <form onSubmit={sendMessage} className="border-t p-4">
+                {/* Selected file preview */}
                 {file && (
-                  <div className="flex items-center gap-2 rounded bg-secondary px-2 py-1 text-xs">
-                    {getFileIcon(file.name)}
-                    <span>{file.name}</span>
+                  <div className="mb-3 flex items-center justify-between gap-2 rounded-lg border bg-secondary/50 px-3 py-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {getFileIcon(file.name)}
+                      <span className="truncate text-sm font-medium">{file.name}</span>
+                    </div>
                     <Button
                       type="button"
                       size="icon"
                       variant="ghost"
+                      className="h-8 w-8 shrink-0"
                       onClick={() => {
                         setFile(null);
                         if (fileInputRef.current) fileInputRef.current.value = '';
                       }}
                     >
-                      <Trash className="h-3 w-3" />
+                      <Trash className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={(!newMessage.trim() && !file) || !canSendToSelectedGroup}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+
+                {/* Input row */}
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder={canSendToSelectedGroup ? 'Type a message...' : 'Only admin and principal can post here'}
+                    className="flex-1 min-w-0"
+                    autoFocus
+                    disabled={!canSendToSelectedGroup}
+                  />
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.png,.jpg,.jpeg,.gif,.bmp,.webp,.svg,.mp4,.avi,.mkv,.mov,.wmv,.webm,.mp3,.wav,.ogg,.flac,.zip,.rar,.7z,.tar,.gz"
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Attach file"
+                    disabled={!canSendToSelectedGroup}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+
+                  <Button
+                    type="submit"
+                    size="icon"
+                    className="shrink-0"
+                    disabled={(!newMessage.trim() && !file) || !canSendToSelectedGroup}
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
               </form>
             )}
           </CardContent>

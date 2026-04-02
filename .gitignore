@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+
+# Environment variables (NEVER commit)
+.env
+backend/.env
+
+# Database
+backend/*.db
+backend/rcms.db
+*.db
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Build output
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test artifacts
+backend/test_api.py
+>>>>>>> b86e2623a848564069e6ebc0792e2fd726bc394d

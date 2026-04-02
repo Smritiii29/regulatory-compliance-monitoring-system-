@@ -146,7 +146,6 @@ def send_message():
             return jsonify({'error': f'You do not have access to the {group_name} group'}), 403
         if not can_send_to_group(sender, group_name):
             return jsonify({'error': f'You cannot send messages to the {group_name} group'}), 403
-
     message_type = 'text'
     file_path = None
     file_name = None
@@ -156,13 +155,30 @@ def send_message():
             return jsonify({
                 'error': f'File type not allowed. Supported: {", ".join(sorted(CHAT_ALLOWED_EXTENSIONS))}'
             }), 400
+
         file_name = secure_filename(file.filename)
         unique_name = f"{uuid.uuid4().hex}_{file_name}"
         upload_dir = os.path.join(current_app.config.get('UPLOAD_FOLDER', 'uploads'), 'chat')
         os.makedirs(upload_dir, exist_ok=True)
-        file.save(os.path.join(upload_dir, unique_name))
+
+        file_full_path = os.path.join(upload_dir, unique_name)
+        file.save(file_full_path)
+
         file_path = f"chat/{unique_name}"
-        message_type = 'file'
+
+        ext = file_name.rsplit('.', 1)[1].lower()
+
+        if ext in {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'}:
+            message_type = 'image'
+        elif ext in {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv'}:
+            message_type = 'document'
+        elif ext in {'mp4', 'avi', 'mkv', 'mov', 'wmv', 'webm'}:
+            message_type = 'video'
+        elif ext in {'mp3', 'wav', 'ogg', 'flac'}:
+            message_type = 'audio'
+        else:
+            message_type = 'file'
+
         if not message:
             message = f"Attachment: {file_name}"
 
