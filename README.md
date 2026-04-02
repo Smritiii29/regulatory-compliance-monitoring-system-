@@ -31,7 +31,7 @@ RCMS is a robust platform for educational institutions to manage, track, and ens
 
 ## 🛠️ Tech Stack
 - **Frontend:** React, TypeScript, Vite, TailwindCSS, shadcn/ui
-- **Backend:** Flask, PostgreSQL DB, Flask-JWT-Extended, SQLAlchemy
+- **Backend and DB:** Flask, PostgreSQL DB, Flask-JWT-Extended, SQLAlchemy
 - **API:** RESTful endpoints for chat, notifications, circulars, submissions, and reports
 
 ---
