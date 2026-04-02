@@ -8,8 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
   FileText, Upload, CheckCircle, Clock, AlertTriangle, Users,
-  TrendingUp, BarChart3, ArrowRight, XCircle
+  TrendingUp, BarChart3, ArrowRight, XCircle, Bell
 } from 'lucide-react';
+
+const DASHBOARD_REFRESH_MS = 3000;
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -18,10 +20,37 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    dashboardAPI.stats()
-      .then(setStats)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    let isMounted = true;
+
+    const loadStats = async (showLoader = false) => {
+      if (showLoader) {
+        setLoading(true);
+      }
+
+      try {
+        const data = await dashboardAPI.stats();
+        if (isMounted) {
+          setStats(data);
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (showLoader && isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadStats(true);
+
+    const intervalId = window.setInterval(() => {
+      loadStats(false);
+    }, DASHBOARD_REFRESH_MS);
+
+    return () => {
+      isMounted = false;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   if (loading) {
@@ -35,6 +64,7 @@ const Dashboard = () => {
   if (!stats) return <p className="text-muted-foreground p-6">Failed to load dashboard data.</p>;
 
   const isAdminOrPrincipal = user?.role === 'admin' || user?.role === 'principal';
+  const showAnnouncements = user?.role === 'admin' || user?.role === 'faculty';
 
   return (
     <div className="space-y-6">
@@ -42,6 +72,74 @@ const Dashboard = () => {
         <h1 className="text-2xl font-bold">Welcome, {user?.name}</h1>
         <p className="text-muted-foreground capitalize">{user?.role}{user?.department ? ` — ${user.department}` : ''}</p>
       </div>
+
+      {showAnnouncements && (
+        <Card className="overflow-hidden border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-white shadow-sm">
+          <CardHeader className="border-b border-amber-200/70 pb-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-amber-500/15 p-3 text-amber-700">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl text-amber-950">Announcements</CardTitle>
+                  <p className="text-sm text-amber-900/80">
+                    Latest titles from AICTE tracking and admin circular uploads.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {!!stats.unread_announcements && (
+                  <Badge className="bg-amber-600 text-white hover:bg-amber-600">
+                    {stats.unread_announcements} unread
+                  </Badge>
+                )}
+                <Button variant="outline" size="sm" onClick={() => navigate('/circulars')}>
+                  Open Circulars <ArrowRight className="ml-1 w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-5">
+            {stats.announcements?.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2">
+                {stats.announcements.map((announcement: any) => (
+                  <button
+                    key={announcement.id}
+                    type="button"
+                    onClick={() => navigate('/circulars')}
+                    className="rounded-xl border border-amber-200 bg-white/90 p-4 text-left transition hover:border-amber-400 hover:bg-amber-50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-2 font-semibold text-slate-900">{announcement.title}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                          <Badge variant="outline">{announcement.source}</Badge>
+                          {announcement.regulation_type && (
+                            <Badge variant="secondary">{announcement.regulation_type}</Badge>
+                          )}
+                          <span>
+                            {announcement.created_at
+                              ? new Date(announcement.created_at).toLocaleDateString()
+                              : 'Recently added'}
+                          </span>
+                        </div>
+                      </div>
+                      <Badge variant={announcement.priority === 'high' ? 'destructive' : 'secondary'}>
+                        {announcement.priority}
+                      </Badge>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                No announcements available yet.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

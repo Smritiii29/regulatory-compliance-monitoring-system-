@@ -4,7 +4,7 @@ from services.scraper import run_scraper
 scheduler = BackgroundScheduler()
 
 def start_scheduler(app):
-    print("🚀 Scheduler starting...")
+    print("Scheduler starting...")
 
     def job():
         print("Running scheduled scraper...")
@@ -23,4 +23,4 @@ def start_scheduler(app):
 
     scheduler.start()
 
-    print("✅ Scheduler started successfully")
+    print("Scheduler started successfully")

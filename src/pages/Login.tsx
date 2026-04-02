@@ -15,13 +15,16 @@ const API_BASE = 'http://localhost:5000/api';
 const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   invalid_state: 'Authentication failed (invalid state). Please try again.',
   no_code: 'Authentication was cancelled or failed.',
+  no_token: 'Authentication completed, but no session token was returned.',
   google_config_failed: 'Could not connect to Google. Please try again.',
+  microsoft_config_failed: 'Could not connect to Microsoft. Please try again.',
   token_exchange_failed: 'Authentication failed. Please try again.',
   userinfo_failed: 'Could not retrieve your account info.',
   email_not_verified: 'Your email is not verified with the provider.',
   email_not_allowed: 'Your email is not authorized to access this system.',
   account_disabled: 'Your account has been disabled. Contact administrator.',
   no_email: 'Could not retrieve email from your account.',
+  not_registered: 'Your email is not registered in this system.',
 };
 
 const Login = () => {
@@ -254,8 +257,7 @@ const Login = () => {
           </Card>
 
           <p className="text-center text-sm text-muted-foreground">
-            Don't have an account?{' '}
-            <a href="/signup" className="text-primary font-medium hover:underline">Sign Up</a>
+            Access is limited to pre-authorized institutional accounts.
           </p>
         </div>
       </div>

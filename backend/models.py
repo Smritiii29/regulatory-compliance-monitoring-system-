@@ -12,6 +12,7 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=False)
 
     email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255))
 
     role = db.Column(db.String(20), nullable=False)
     # admin / principal / hod / faculty
@@ -179,6 +180,30 @@ class ChatMessage(db.Model):
         }
 
 # ── Activity Log ───────────────────────────────────────────────────────
+
+class ChatThreadState(db.Model):
+    __tablename__ = 'chat_thread_states'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    thread_type = db.Column(db.String(20), nullable=False)
+    thread_key = db.Column(db.String(120), nullable=False)
+    last_read_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'thread_type', 'thread_key', name='uq_chat_thread_state'),
+    )
+
+    user = db.relationship('User', backref='chat_thread_states')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'thread_type': self.thread_type,
+            'thread_key': self.thread_key,
+            'last_read_at': self.last_read_at.isoformat() if self.last_read_at else None,
+        }
+
 
 class ActivityLog(db.Model):
     __tablename__ = 'activity_logs'
