@@ -67,7 +67,7 @@ RCMS is a robust platform for educational institutions to manage, track, and ens
   cd backend
   python app.py
   ```
-- Access the app at `http://localhost:3000` (frontend) and `http://localhost:5000` (backend).
+- Access the app at `http://localhost:8080` (frontend) and `http://localhost:5000` (backend).
 
 ---
 
