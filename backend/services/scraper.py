@@ -248,6 +248,8 @@ def build_description(item):
     return f"Imported automatically from AICTE circulars. Source: {source_url}"
 
 
+# ONLY showing corrected save_to_db + relevant parts
+
 def save_to_db(notices, upload_folder):
     try:
         count = 0
@@ -257,7 +259,9 @@ def save_to_db(notices, upload_folder):
         circular_upload_dir = os.path.join(upload_folder, "circulars")
 
         for item in notices:
-            title = normalize_title(item["title"])
+            # 🔥 FORCE NEW (FOR TESTING)
+            title = normalize_title(item["title"]) #+ "TEST7"
+
             if not title:
                 continue
 
@@ -266,24 +270,13 @@ def save_to_db(notices, upload_folder):
             deadline = extract_deadline(title)
             description = build_description(item)
 
-            existing = (
-                Circular.query.filter(
-                    Circular.title.in_([title, f"{title}TEST3"])
-                )
-                .order_by(Circular.id.asc())
-                .first()
-            )
+            # ✅ CLEAN duplicate check
+            existing = Circular.query.filter_by(title=title).first()
 
             file_path = None
             file_name = None
 
-            needs_pdf = item.get("pdf_url") and (
-                not existing
-                or not existing.file_path
-                or not os.path.exists(existing.file_path)
-            )
-
-            if needs_pdf:
+            if item.get("pdf_url"):
                 try:
                     file_path, file_name = download_pdf(
                         session,
@@ -295,24 +288,6 @@ def save_to_db(notices, upload_folder):
                     print(f"Failed to download PDF for {title}: {exc}")
 
             if existing:
-                updated = False
-
-                if existing.title != title:
-                    existing.title = title
-                    updated = True
-                if existing.description != description:
-                    existing.description = description
-                    updated = True
-                if not existing.target_departments:
-                    existing.target_departments = "all"
-                    updated = True
-                if file_path and file_name:
-                    existing.file_path = file_path
-                    existing.file_name = file_name
-                    updated = True
-
-                if updated:
-                    db.session.add(existing)
                 continue
 
             new_circular = Circular(
@@ -337,19 +312,17 @@ def save_to_db(notices, upload_folder):
         db.session.commit()
         print(f"{count} new circulars added")
 
+        # 🔥 CREATE NOTIFICATIONS (FOR ALL USERS INCLUDING ADMIN)
         if new_items:
             users = User.query.filter(User.is_active.is_(True)).all()
 
             for circular in new_items:
                 for user in users:
-                    if user.id == circular.uploaded_by:
-                        continue
-
                     notification = Notification(
                         user_id=user.id,
                         circular_id=circular.id,
-                        title=circular.title,
-                        message=f"New circular: {circular.title}",
+                        title=f"New Circular: {circular.title}",
+                        message=f"New circular published: {circular.title}",
                         type="circular",
                         is_read=False,
                     )
@@ -357,10 +330,8 @@ def save_to_db(notices, upload_folder):
 
             db.session.commit()
 
+            # 🔥 SEND EMAIL TO ALL USERS
             for user in users:
-                if user.id == uploader_id:
-                    continue
-
                 send_circulars_email(
                     to_email=user.email,
                     name=user.name,
@@ -374,7 +345,7 @@ def save_to_db(notices, upload_folder):
                 )
 
     except Exception as exc:
-        print("Error while saving to DB:", exc)
+        print("❌ Error while saving to DB:", exc)
         db.session.rollback()
 
 
