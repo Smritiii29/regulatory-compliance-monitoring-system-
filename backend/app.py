@@ -288,6 +288,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import Config
 from models import User, db
+from models import User, db
 
 # 🔥 Import scheduler
 from services.scheduler import start_scheduler
@@ -354,6 +355,99 @@ def sync_authorized_login_users(app: Flask):
     db.session.commit()
 
 
+def _random_placeholder_password():
+    return generate_password_hash(os.urandom(24).hex())
+
+
+def ensure_access_accounts(app):
+    managed_accounts = [
+        {
+            'role': 'admin',
+            'new_email': app.config.get('ACCESS_ADMIN_EMAIL', '').strip().lower(),
+            'legacy_email': app.config.get('ACCESS_ADMIN_LEGACY_EMAIL', '').strip().lower(),
+            'name': app.config.get('ACCESS_ADMIN_NAME', 'RCMS Admin').strip() or 'RCMS Admin',
+            'password': app.config.get('ACCESS_ADMIN_PASSWORD', '').strip(),
+            'department': None,
+        },
+        {
+            'role': 'faculty',
+            'new_email': app.config.get('ACCESS_FACULTY_EMAIL', '').strip().lower(),
+            'legacy_email': app.config.get('ACCESS_FACULTY_LEGACY_EMAIL', '').strip().lower(),
+            'name': app.config.get('ACCESS_FACULTY_NAME', 'RCMS Faculty').strip() or 'RCMS Faculty',
+            'password': app.config.get('ACCESS_FACULTY_PASSWORD', '').strip(),
+            'department': app.config.get('ACCESS_FACULTY_DEPARTMENT', 'CSE').strip() or 'CSE',
+        },
+    ]
+
+    changed = False
+
+    for account in managed_accounts:
+        new_email = account['new_email']
+        legacy_email = account['legacy_email']
+
+        if not new_email:
+            continue
+
+        target_user = User.query.filter_by(email=new_email).first()
+        legacy_user = None
+
+        if legacy_email and legacy_email != new_email:
+            legacy_user = User.query.filter_by(email=legacy_email).first()
+
+        if target_user and legacy_user and target_user.id != legacy_user.id:
+            legacy_user.is_active = False
+            changed = True
+        elif not target_user and legacy_user:
+            target_user = legacy_user
+            target_user.email = new_email
+            changed = True
+
+        if not target_user:
+            password_hash = (
+                generate_password_hash(account['password'])
+                if account['password']
+                else _random_placeholder_password()
+            )
+            target_user = User(
+                name=account['name'],
+                email=new_email,
+                password_hash=password_hash,
+                role=account['role'],
+                department=account['department'],
+                is_active=True,
+                is_verified=True,
+            )
+            db.session.add(target_user)
+            changed = True
+        else:
+            if account['name'] and target_user.name != account['name']:
+                target_user.name = account['name']
+                changed = True
+            if target_user.role != account['role']:
+                target_user.role = account['role']
+                changed = True
+            if target_user.department != account['department']:
+                target_user.department = account['department']
+                changed = True
+            if not target_user.is_active:
+                target_user.is_active = True
+                changed = True
+            if not target_user.is_verified:
+                target_user.is_verified = True
+                changed = True
+            if account['password']:
+                existing_password_hash = getattr(target_user, 'password_hash', None)
+                if not existing_password_hash or not check_password_hash(existing_password_hash, account['password']):
+                    target_user.password_hash = generate_password_hash(account['password'])
+                    changed = True
+            elif not getattr(target_user, 'password_hash', None):
+                target_user.password_hash = _random_placeholder_password()
+                changed = True
+
+    if changed:
+        db.session.commit()
+
+
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
@@ -400,6 +494,7 @@ def create_app():
         db.create_all()
         ensure_schema_compatibility()
         sync_authorized_login_users(app)
+        ensure_access_accounts(app)
 
     # 🔥 START SCHEDULER
     start_scheduler(app)

@@ -93,6 +93,18 @@ class Config:
     AUTHORIZED_LOGIN_USERS = os.getenv('AUTHORIZED_LOGIN_USERS', '')
     AUTHORIZED_LOGIN_USER_MAP = parse_authorized_login_users(AUTHORIZED_LOGIN_USERS)
 
+    # Managed access accounts
+    ACCESS_ADMIN_EMAIL = os.getenv('ACCESS_ADMIN_EMAIL', 'rcmsadmin1@gmail.com').strip().lower()
+    ACCESS_ADMIN_LEGACY_EMAIL = os.getenv('ACCESS_ADMIN_LEGACY_EMAIL', 'rcmsadmin@gmail.com').strip().lower()
+    ACCESS_ADMIN_NAME = os.getenv('ACCESS_ADMIN_NAME', 'RCMS Admin').strip()
+    ACCESS_ADMIN_PASSWORD = os.getenv('ACCESS_ADMIN_PASSWORD', '').strip()
+
+    ACCESS_FACULTY_EMAIL = os.getenv('ACCESS_FACULTY_EMAIL', 'rcmsfaculty1@gmail.com').strip().lower()
+    ACCESS_FACULTY_LEGACY_EMAIL = os.getenv('ACCESS_FACULTY_LEGACY_EMAIL', 'rcmsfaculty@gmail.com').strip().lower()
+    ACCESS_FACULTY_NAME = os.getenv('ACCESS_FACULTY_NAME', 'RCMS Faculty').strip()
+    ACCESS_FACULTY_PASSWORD = os.getenv('ACCESS_FACULTY_PASSWORD', '').strip()
+    ACCESS_FACULTY_DEPARTMENT = os.getenv('ACCESS_FACULTY_DEPARTMENT', 'CSE').strip()
+
     # Gemini AI Configuration
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
     GEMINI_MODEL = 'gemini-2.5-flash'  # Latest stable model with good free tier support

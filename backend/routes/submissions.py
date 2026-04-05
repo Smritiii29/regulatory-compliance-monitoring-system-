@@ -236,9 +236,31 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 from models import db, Submission, Circular, User, Notification, ActivityLog
 from utils.email_sender import send_notification_email
+from utils.storage_paths import resolve_existing_path
 from datetime import datetime
 
 submissions_bp = Blueprint('submissions', __name__)
+
+
+def _can_access_submission(user: User, submission: Submission) -> bool:
+    if user.role in ('admin', 'principal'):
+        return True
+    if user.role == 'hod':
+        return user.department and submission.user and submission.user.department == user.department
+    return submission.user_id == user.id
+
+
+def _resolve_submission_file(submission: Submission, persist: bool = False):
+    resolved_path = resolve_existing_path(
+        submission.file_path,
+        current_app.config['UPLOAD_FOLDER'],
+        preferred_subdir='submissions',
+        candidate_names=[submission.file_name],
+    )
+    if persist and resolved_path and submission.file_path != resolved_path:
+        submission.file_path = resolved_path
+        db.session.commit()
+    return resolved_path
 
 # ── Submit proof for a circular ──────────────────────────────────────
 
@@ -385,7 +407,11 @@ def list_submissions():
 @submissions_bp.route('/<int:submission_id>', methods=['GET'])
 @jwt_required()
 def get_submission(submission_id):
+    uid = int(get_jwt_identity())
+    user = User.query.get_or_404(uid)
     submission = Submission.query.get_or_404(submission_id)
+    if not _can_access_submission(user, submission):
+        return jsonify({'error': 'Access denied'}), 403
     return jsonify(submission.to_dict())
 
 # ── Review submission (approve/reject) ───────────────────────────────
@@ -399,6 +425,8 @@ def review_submission(submission_id):
         return jsonify({'error': 'Only admin, principal, or HOD can review submissions'}), 403
 
     submission = Submission.query.get_or_404(submission_id)
+    if reviewer.role == 'hod' and reviewer.department != submission.user.department:
+        return jsonify({'error': 'Access denied'}), 403
     data = request.get_json()
     action = data.get('action')  # 'approve' or 'reject'
     admin_remarks = data.get('remarks', '').strip()
@@ -447,11 +475,16 @@ def review_submission(submission_id):
 @submissions_bp.route('/<int:submission_id>/download', methods=['GET'])
 @jwt_required()
 def download_submission(submission_id):
+    uid = int(get_jwt_identity())
+    user = User.query.get_or_404(uid)
     submission = Submission.query.get_or_404(submission_id)
-    if not submission.file_path or not os.path.exists(submission.file_path):
+    if not _can_access_submission(user, submission):
+        return jsonify({'error': 'Access denied'}), 403
+    resolved_path = _resolve_submission_file(submission, persist=True)
+    if not resolved_path or not os.path.exists(resolved_path):
         return jsonify({'error': 'File not found'}), 404
-    directory = os.path.dirname(submission.file_path)
-    filename = os.path.basename(submission.file_path)
+    directory = os.path.dirname(resolved_path)
+    filename = os.path.basename(resolved_path)
     return send_from_directory(directory, filename, as_attachment=True,
                                download_name=submission.file_name)
 

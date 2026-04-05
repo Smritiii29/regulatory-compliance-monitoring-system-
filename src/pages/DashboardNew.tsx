@@ -115,6 +115,11 @@ const Dashboard = () => {
                         <p className="line-clamp-2 font-semibold text-slate-900">{announcement.title}</p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-600">
                           <Badge variant="outline">{announcement.source}</Badge>
+                          {announcement.is_new && (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">
+                              New
+                            </Badge>
+                          )}
                           {announcement.regulation_type && (
                             <Badge variant="secondary">{announcement.regulation_type}</Badge>
                           )}

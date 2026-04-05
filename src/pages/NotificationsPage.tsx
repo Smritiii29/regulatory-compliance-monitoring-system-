@@ -280,6 +280,14 @@ const NotificationsPage = () => {
                       {!n.is_read && <div className="w-2 h-2 rounded-full bg-primary shrink-0" />}
                     </div>
                     <p className="text-sm text-muted-foreground">{n.message}</p>
+                    {(n.source_label || n.is_new) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {n.source_label && <Badge variant="outline">{n.source_label}</Badge>}
+                        {n.is_new && (
+                          <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">New</Badge>
+                        )}
+                      </div>
+                    )}
                     <p className="text-xs text-muted-foreground mt-1">{new Date(n.created_at).toLocaleString()}</p>
                   </div>
                   <div className="flex gap-1 shrink-0">

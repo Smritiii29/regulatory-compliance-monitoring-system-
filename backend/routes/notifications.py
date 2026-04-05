@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Notification, User
+from models import Circular, db, Notification, User
 
 notifications_bp = Blueprint('notifications', __name__)
 
@@ -17,7 +17,19 @@ def list_notifications():
         query = query.filter_by(is_read=False)
 
     notifications = query.order_by(Notification.created_at.desc()).all()
-    return jsonify([n.to_dict() for n in notifications])
+    payload = []
+
+    for notification in notifications:
+        item = notification.to_dict()
+        if notification.circular_id:
+            circular = Circular.query.get(notification.circular_id)
+            if circular:
+                item['source_label'] = circular.source_label()
+                item['source_type'] = circular.source_type()
+                item['is_new'] = circular.is_new_source()
+        payload.append(item)
+
+    return jsonify(payload)
 
 # ── Mark as read ─────────────────────────────────────────────────────
 

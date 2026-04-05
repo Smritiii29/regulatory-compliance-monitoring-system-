@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timedelta
 
 db = SQLAlchemy()
 
@@ -12,6 +12,8 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=False)
 
     email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255))
+
     password_hash = db.Column(db.String(255))
 
     role = db.Column(db.String(20), nullable=False)
@@ -63,6 +65,28 @@ class Circular(db.Model):
     uploader = db.relationship('User', backref='circulars')
     submissions = db.relationship('Submission', backref='circular', lazy=True)
 
+    def is_scraped_source(self):
+        description = (self.description or '').lower()
+        return description.startswith('imported automatically from')
+
+    def source_type(self):
+        return 'scraped' if self.is_scraped_source() else 'admin'
+
+    def source_label(self):
+        if not self.is_scraped_source():
+            return 'Admin Upload'
+
+        regulation = (self.regulation_type or '').strip()
+        if regulation:
+            return f'{regulation} Tracker'
+
+        return 'Website Tracker'
+
+    def is_new_source(self):
+        if not self.created_at:
+            return False
+        return self.created_at >= datetime.utcnow() - timedelta(hours=48)
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -79,6 +103,9 @@ class Circular(db.Model):
             'file_name': self.file_name,
             'uploaded_by': self.uploaded_by,
             'uploader_name': self.uploader.name if self.uploader else None,
+            'source_type': self.source_type(),
+            'source_label': self.source_label(),
+            'is_new': self.is_new_source(),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
             'submission_count': len(self.submissions),

@@ -68,6 +68,8 @@ const Circulars = () => {
   const [summaryDialogOpen, setSummaryDialogOpen] = useState(false);
 
   const isAdminOrPrincipal = user?.role === 'admin' || user?.role === 'principal';
+  const scrapedCirculars = circulars.filter((circular) => circular.source_type === 'scraped');
+  const adminCirculars = circulars.filter((circular) => circular.source_type !== 'scraped');
 
   const fetchCirculars = () => {
     setLoading(true);
@@ -117,9 +119,9 @@ const Circulars = () => {
     }
   };
 
-  const isSummarizableFile = (fileName?: string) => {
-    if (!fileName) return false;
-    const normalized = fileName.toLowerCase();
+  const isSummarizableFile = (fileReference?: string) => {
+    if (!fileReference) return false;
+    const normalized = fileReference.toLowerCase();
     return normalized.endsWith('.pdf') || normalized.endsWith('.docx');
   };
 
@@ -247,6 +249,143 @@ const Circulars = () => {
     }
   };
 
+  const renderCircularSection = (title: string, description: string, items: any[]) => {
+    if (!items.length) return null;
+
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
+          <Badge variant="outline">{items.length} items</Badge>
+        </div>
+
+        <div className="space-y-4">
+          {items.map((circular) => (
+            <Card key={circular.id} className="transition-shadow hover:shadow-md">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      {statusIcon(circular.status)}
+                      <h3 className="truncate font-semibold">{circular.title}</h3>
+                      {circular.is_new && (
+                        <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">New</Badge>
+                      )}
+                    </div>
+                    <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">
+                      {circular.description}
+                    </p>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Badge>{circular.category}</Badge>
+                      <Badge variant={circular.source_type === 'scraped' ? 'default' : 'outline'}>
+                        {circular.source_label}
+                      </Badge>
+                      {circular.regulation_type && (
+                        <Badge variant="outline">{circular.regulation_type}</Badge>
+                      )}
+                      <Badge variant={priorityColor(circular.priority) as any}>
+                        {circular.priority} priority
+                      </Badge>
+                      {circular.deadline && (
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(circular.deadline).toLocaleDateString()}
+                        </Badge>
+                      )}
+                      <Badge variant="secondary">
+                        {circular.target_departments === 'all'
+                          ? 'All Depts'
+                          : circular.target_departments}
+                      </Badge>
+                      {circular.summary_cached && (
+                        <Badge variant="secondary">Summary ready</Badge>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>By {circular.uploader_name}</span>
+                      <span>{new Date(circular.created_at).toLocaleDateString()}</span>
+                      <span>
+                        {circular.submission_count} submissions ({circular.approved_count} approved)
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-col gap-2">
+                    {circular.file_path && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDownload(circular.id, circular.file_name)}
+                      >
+                        <Download className="mr-1 h-4 w-4" />
+                        Download
+                      </Button>
+                    )}
+
+                    {circular.file_path && isSummarizableFile(circular.file_name || circular.file_path) && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSummarize(circular.id)}
+                        disabled={summaryLoading}
+                      >
+                        <FileText className="mr-1 h-4 w-4" />
+                        Summarize
+                      </Button>
+                    )}
+
+                    {!isAdminOrPrincipal && circular.status === 'active' && !circular.my_submission && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedCircular(circular);
+                          setSubmitOpen(true);
+                        }}
+                      >
+                        <Upload className="mr-1 h-4 w-4" />
+                        Submit Proof
+                      </Button>
+                    )}
+
+                    {circular.my_submission && (
+                      <Badge
+                        variant={
+                          circular.my_submission.status === 'approved'
+                            ? 'default'
+                            : circular.my_submission.status === 'rejected'
+                              ? 'destructive'
+                              : 'secondary'
+                        }
+                      >
+                        {circular.my_submission.status}
+                      </Badge>
+                    )}
+
+                    {isAdminOrPrincipal && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-destructive"
+                        onClick={() => deleteCircular(circular.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -340,116 +479,17 @@ const Circulars = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {Array.isArray(circulars) && circulars.map((circular) => (
-            <Card key={circular.id} className="transition-shadow hover:shadow-md">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
-                      {statusIcon(circular.status)}
-                      <h3 className="truncate font-semibold">{circular.title}</h3>
-                    </div>
-                    <p className="mb-3 line-clamp-2 text-sm text-muted-foreground">
-                      {circular.description}
-                    </p>
-
-                    <div className="flex flex-wrap gap-2">
-                      <Badge>{circular.category}</Badge>
-                      {circular.regulation_type && (
-                        <Badge variant="outline">{circular.regulation_type}</Badge>
-                      )}
-                      <Badge variant={priorityColor(circular.priority) as any}>
-                        {circular.priority} priority
-                      </Badge>
-                      {circular.deadline && (
-                        <Badge variant="secondary" className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(circular.deadline).toLocaleDateString()}
-                        </Badge>
-                      )}
-                      <Badge variant="secondary">
-                        {circular.target_departments === 'all'
-                          ? 'All Depts'
-                          : circular.target_departments}
-                      </Badge>
-                    </div>
-
-                    <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
-                      <span>By {circular.uploader_name}</span>
-                      <span>{new Date(circular.created_at).toLocaleDateString()}</span>
-                      <span>
-                        {circular.submission_count} submissions ({circular.approved_count} approved)
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex shrink-0 flex-col gap-2">
-                    {circular.file_path && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDownload(circular.id, circular.file_name)}
-                      >
-                        <Download className="mr-1 h-4 w-4" />
-                        Download
-                      </Button>
-                    )}
-
-                    {circular.file_path && isSummarizableFile(circular.file_name) && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleSummarize(circular.id)}
-                        disabled={summaryLoading}
-                      >
-                        <FileText className="mr-1 h-4 w-4" />
-                        Summarize
-                      </Button>
-                    )}
-
-                    {!isAdminOrPrincipal && circular.status === 'active' && !circular.my_submission && (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          setSelectedCircular(circular);
-                          setSubmitOpen(true);
-                        }}
-                      >
-                        <Upload className="mr-1 h-4 w-4" />
-                        Submit Proof
-                      </Button>
-                    )}
-
-                    {circular.my_submission && (
-                      <Badge
-                        variant={
-                          circular.my_submission.status === 'approved'
-                            ? 'default'
-                            : circular.my_submission.status === 'rejected'
-                              ? 'destructive'
-                              : 'secondary'
-                        }
-                      >
-                        {circular.my_submission.status}
-                      </Badge>
-                    )}
-
-                    {isAdminOrPrincipal && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-destructive"
-                        onClick={() => deleteCircular(circular.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-8">
+          {renderCircularSection(
+            'Website / Regulatory Tracker Uploads',
+            'Circulars imported automatically from AICTE and other tracked regulatory sources.',
+            scrapedCirculars,
+          )}
+          {renderCircularSection(
+            'Admin Uploaded Circulars',
+            'Circulars uploaded manually by admin or principal users.',
+            adminCirculars,
+          )}
         </div>
       )}
 

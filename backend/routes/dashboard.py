@@ -256,10 +256,7 @@ def visible_circulars_query(user):
 
 
 def announcement_source(circular):
-    description = (circular.description or '').lower()
-    if description.startswith('imported automatically from aicte circulars.'):
-        return 'AICTE Tracker'
-    return 'Admin Upload'
+    return circular.source_label()
 
 
 def build_accreditation_payload():
@@ -296,28 +293,37 @@ def stats():
 
     now = datetime.utcnow()
     thirty_days = now - timedelta(days=30)
+    visible_circulars = visible_circulars_query(user).all()
+    visible_circular_ids = [c.id for c in visible_circulars]
 
     # ── Common stats ───────────────────────────────────────────────
-    total_circulars = Circular.query.count()
-    active_circulars = Circular.query.filter_by(status='active').count()
-    total_submissions = Submission.query.count()
-    pending_submissions = Submission.query.filter_by(status='submitted').count()
-    approved_submissions = Submission.query.filter_by(status='approved').count()
-    rejected_submissions = Submission.query.filter_by(status='rejected').count()
+    total_circulars = len(visible_circulars)
+    active_circulars = len([c for c in visible_circulars if c.status == 'active'])
+
+    visible_submissions_query = Submission.query.filter(Submission.id == -1)
+    if visible_circular_ids:
+        visible_submissions_query = Submission.query.filter(Submission.circular_id.in_(visible_circular_ids))
+
+    total_submissions = visible_submissions_query.count()
+    pending_submissions = visible_submissions_query.filter_by(status='submitted').count()
+    approved_submissions = visible_submissions_query.filter_by(status='approved').count()
+    rejected_submissions = visible_submissions_query.filter_by(status='rejected').count()
     total_users = User.query.filter_by(is_active=True).count()
 
     # Upcoming deadlines
-    upcoming = Circular.query.filter(
-        Circular.deadline >= now,
-        Circular.deadline <= now + timedelta(days=14),
-        Circular.status == 'active'
-    ).order_by(Circular.deadline.asc()).limit(10).all()
+    upcoming = sorted(
+        [
+            c for c in visible_circulars
+            if c.deadline and c.deadline >= now and c.deadline <= now + timedelta(days=14) and c.status == 'active'
+        ],
+        key=lambda c: c.deadline,
+    )[:10]
 
     # Overdue circulars
-    overdue = Circular.query.filter(
-        Circular.deadline < now,
-        Circular.status == 'active'
-    ).all()
+    overdue = [
+        c for c in visible_circulars
+        if c.deadline and c.deadline < now and c.status == 'active'
+    ]
 
     # Recent activity
     recent_activity = ActivityLog.query.order_by(ActivityLog.created_at.desc()).limit(20).all()
@@ -325,8 +331,11 @@ def stats():
     # Compliance rate
     compliance_rate = round(approved_submissions / total_submissions * 100, 1) if total_submissions > 0 else 0
 
-    announcement_circulars = visible_circulars_query(user) \
-        .order_by(Circular.created_at.desc()).limit(8).all()
+    announcement_circulars = sorted(
+        visible_circulars,
+        key=lambda c: c.created_at or datetime.min,
+        reverse=True,
+    )[:8]
 
     announcement_ids = [item.id for item in announcement_circulars]
     unread_announcement_count = Notification.query.filter(
@@ -354,6 +363,8 @@ def stats():
                 'id': c.id,
                 'title': c.title,
                 'source': announcement_source(c),
+                'source_type': c.source_type(),
+                'is_new': c.is_new_source(),
                 'created_at': c.created_at.isoformat() if c.created_at else None,
                 'priority': c.priority,
                 'regulation_type': c.regulation_type,

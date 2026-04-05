@@ -217,9 +217,7 @@ def download_attachment(message_id):
         return jsonify({'error': 'No file attached'}), 404
 
     if msg.receiver_id:
-        other_user_id = msg.receiver_id if msg.sender_id == uid else msg.sender_id
-        other_user = User.query.get(other_user_id) if other_user_id else None
-        if not other_user or not (can_chat(current_user.role, other_user.role) or can_chat(other_user.role, current_user.role)):
+        if uid not in (msg.sender_id, msg.receiver_id):
             return jsonify({'error': 'Access denied'}), 403
     else:
         if not msg.group_name or not can_access_group(current_user, msg.group_name):

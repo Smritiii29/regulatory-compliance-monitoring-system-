@@ -18,6 +18,7 @@ BASE_URL = "https://www.aicte.gov.in"
 PDF_CHUNK_SIZE = 1024 * 1024
 REQUEST_TIMEOUT = (20, 300)
 DETAIL_PAGE_TIMEOUT = (20, 120)
+SCRAPER_NOTICE_LIMIT = 20
 
 
 def build_session():
@@ -215,7 +216,7 @@ def download_pdf(session, pdf_url, title, upload_root):
 def scrape_aicte():
     session = build_session()
     html = fetch_page(session)
-    notices = parse_notifications(html)
+    notices = parse_notifications(html)[:SCRAPER_NOTICE_LIMIT]
 
     for notice in notices:
         if not notice["pdf_url"]:
